@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: calorie-tracker-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: calorie
+      POSTGRES_PASSWORD: calorie
+      POSTGRES_DB: calorie_tracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - calorie_tracker_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U calorie -d calorie_tracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  calorie_tracker_pgdata:

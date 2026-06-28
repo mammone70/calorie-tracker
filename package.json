@@ -1,0 +1,25 @@
+{
+  "name": "calorie-tracker",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "setup": "node scripts/setup-assets.js && pnpm install && pnpm build:packages",
+    "build:packages": "pnpm --filter @calorie-tracker/shared build && pnpm --filter @calorie-tracker/db build",
+    "dev:api": "pnpm --filter @calorie-tracker/api dev",
+    "dev:mobile": "pnpm --filter @calorie-tracker/mobile start",
+    "build": "pnpm -r build",
+    "db:generate": "pnpm --filter @calorie-tracker/db generate",
+    "db:up": "docker compose up -d",
+    "db:migrate": "pnpm --filter @calorie-tracker/db migrate",
+    "db:studio": "pnpm --filter @calorie-tracker/db studio",
+    "setup:android": "powershell -ExecutionPolicy Bypass -File scripts/setup-android.ps1",
+    "android:emulator": "powershell -ExecutionPolicy Bypass -File scripts/start-android-emulator.ps1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20"
+  }
+}

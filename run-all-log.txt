@@ -1,0 +1,191 @@
+>>> pnpm --version
+
+'pnpm' is not recognized as an internal or external command,
+operable program or batch file.
+
+EXIT:1
+>>> npm install -g pnpm
+
+added 1 package in 3s
+
+1 package is looking for funding
+  run `npm fund` for details
+
+EXIT:0
+>>> pnpm --version
+9.15.4
+
+EXIT:0
+>>> pnpm install
+Scope: all 5 workspace projects
+Progress: resolved 1, reused 0, downloaded 0, added 0
+
+   ╭──────────────────────────────────────────────────────────────────╮
+   │                                                                  │
+   │                Update available! 9.15.4 → 11.8.0.                │
+   │   Changelog: https://github.com/pnpm/pnpm/releases/tag/v11.8.0   │
+   │                Run "pnpm add -g pnpm" to update.                 │
+   │                                                                  │
+   ╰──────────────────────────────────────────────────────────────────╯
+
+Progress: resolved 20, reused 0, downloaded 11, added 0
+Progress: resolved 31, reused 0, downloaded 20, added 0
+Progress: resolved 39, reused 0, downloaded 29, added 0
+Progress: resolved 43, reused 0, downloaded 36, added 0
+Progress: resolved 54, reused 0, downloaded 40, added 0
+Progress: resolved 92, reused 0, downloaded 51, added 0
+Progress: resolved 103, reused 0, downloaded 85, added 0
+Progress: resolved 130, reused 0, downloaded 111, added 0
+Progress: resolved 156, reused 0, downloaded 134, added 0
+Progress: resolved 181, reused 0, downloaded 155, added 0
+Progress: resolved 208, reused 0, downloaded 186, added 0
+Progress: resolved 255, reused 0, downloaded 228, added 0
+Progress: resolved 306, reused 0, downloaded 275, added 0
+Progress: resolved 389, reused 0, downloaded 343, added 0
+Progress: resolved 473, reused 0, downloaded 412, added 0
+Progress: resolved 533, reused 0, downloaded 474, added 0
+Progress: resolved 589, reused 0, downloaded 524, added 0
+Progress: resolved 674, reused 0, downloaded 596, added 0
+Progress: resolved 759, reused 0, downloaded 676, added 0
+Progress: resolved 848, reused 0, downloaded 753, added 0
+Progress: resolved 942, reused 0, downloaded 816, added 0
+Progress: resolved 1003, reused 0, downloaded 881, added 0
+Progress: resolved 1100, reused 0, downloaded 970, added 0
+Progress: resolved 1151, reused 0, downloaded 1040, added 0
+ WARN  18 deprecated subdependencies found: @babel/plugin-proposal-class-properties@7.18.6, @babel/plugin-proposal-nullish-coalescing-operator@7.18.6, @babel/plugin-proposal-optional-chaining@7.21.0, @esbuild-kit/core-utils@3.3.2, @esbuild-kit/esm-loader@2.6.5, @xmldom/xmldom@0.7.13, are-we-there-yet@2.0.0, gauge@3.0.2, glob@10.4.5, glob@10.5.0, glob@7.2.3, inflight@1.0.6, npmlog@5.0.1, rimraf@2.6.3, rimraf@3.0.2, tar@6.2.1, uuid@7.0.3, uuid@8.3.2
+Packages: +1107
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 1158, reused 0, downloaded 1083, added 0
+Progress: resolved 1158, reused 0, downloaded 1102, added 0
+Progress: resolved 1158, reused 0, downloaded 1104, added 0
+Progress: resolved 1158, reused 0, downloaded 1104, added 67
+Progress: resolved 1158, reused 0, downloaded 1104, added 135
+Progress: resolved 1158, reused 0, downloaded 1104, added 152
+Progress: resolved 1158, reused 0, downloaded 1104, added 198
+Progress: resolved 1158, reused 0, downloaded 1104, added 260
+Progress: resolved 1158, reused 0, downloaded 1104, added 362
+Progress: resolved 1158, reused 0, downloaded 1104, added 413
+Progress: resolved 1158, reused 0, downloaded 1104, added 420
+Progress: resolved 1158, reused 0, downloaded 1104, added 452
+Progress: resolved 1158, reused 0, downloaded 1104, added 480
+Progress: resolved 1158, reused 0, downloaded 1104, added 572
+Progress: resolved 1158, reused 0, downloaded 1105, added 632
+Progress: resolved 1158, reused 0, downloaded 1105, added 722
+Progress: resolved 1158, reused 0, downloaded 1105, added 796
+Progress: resolved 1158, reused 0, downloaded 1105, added 904
+Progress: resolved 1158, reused 0, downloaded 1105, added 941
+Progress: resolved 1158, reused 0, downloaded 1105, added 1034
+Progress: resolved 1158, reused 0, downloaded 1105, added 1094
+Progress: resolved 1158, reused 0, downloaded 1105, added 1103
+Progress: resolved 1158, reused 0, downloaded 1105, added 1105
+Progress: resolved 1158, reused 0, downloaded 1105, added 1106
+Progress: resolved 1158, reused 0, downloaded 1105, added 1107
+Progress: resolved 1158, reused 0, downloaded 1105, added 1107, done
+.../esbuild@0.19.12/node_modules/esbuild postinstall$ node install.js
+.../bcrypt@5.1.1/node_modules/bcrypt install$ node-pre-gyp install --fallback-to-build
+.../esbuild@0.18.20/node_modules/esbuild postinstall$ node install.js
+.../node_modules/@nestjs/core postinstall$ opencollective || exit 0
+.../bcrypt@5.1.1/node_modules/bcrypt install: node-pre-gyp info it worked if it ends with ok
+.../bcrypt@5.1.1/node_modules/bcrypt install: node-pre-gyp info using node-pre-gyp@1.0.11
+.../bcrypt@5.1.1/node_modules/bcrypt install: node-pre-gyp info using node@25.2.1 | win32 | x64
+.../bcrypt@5.1.1/node_modules/bcrypt install: node-pre-gyp info check checked for "C:\Users\mammo\Projects\calorie-tracker\node_modules\.pnpm\bcrypt@5.1.1\node_modules\bcrypt\lib\binding\napi-v3\bcrypt_lib.node" (not found)
+.../bcrypt@5.1.1/node_modules/bcrypt install: node-pre-gyp http GET https://github.com/kelektiv/node.bcrypt.js/releases/download/v5.1.1/bcrypt_lib-v5.1.1-napi-v3-win32-x64-unknown.tar.gz
+.../node_modules/@nestjs/core postinstall:                            Thanks for installing nest 
+.../node_modules/@nestjs/core postinstall:                  Please consider donating to our open collective
+.../node_modules/@nestjs/core postinstall:                         to help us maintain this package.
+.../node_modules/@nestjs/core postinstall:                                          
+.../node_modules/@nestjs/core postinstall:                             Number of contributors: 0
+.../node_modules/@nestjs/core postinstall:                              Number of backers: 1206
+.../node_modules/@nestjs/core postinstall:                              Annual budget: $132,482
+.../node_modules/@nestjs/core postinstall:                              Current balance: $11,555
+.../node_modules/@nestjs/core postinstall:                                          
+.../node_modules/@nestjs/core postinstall:              Become a partner: https://opencollective.com/nest/donate
+.../node_modules/@nestjs/core postinstall:                                          
+.../node_modules/@nestjs/core postinstall: Done
+.../bcrypt@5.1.1/node_modules/bcrypt install: node-pre-gyp info install unpacking napi-v3/bcrypt_lib.node
+.../bcrypt@5.1.1/node_modules/bcrypt install: node-pre-gyp info extracted file count: 1 
+.../bcrypt@5.1.1/node_modules/bcrypt install: [bcrypt] Success: "C:\Users\mammo\Projects\calorie-tracker\node_modules\.pnpm\bcrypt@5.1.1\node_modules\bcrypt\lib\binding\napi-v3\bcrypt_lib.node" is installed via remote
+.../bcrypt@5.1.1/node_modules/bcrypt install: node-pre-gyp info ok 
+.../bcrypt@5.1.1/node_modules/bcrypt install: Done
+.../esbuild@0.19.12/node_modules/esbuild postinstall: Done
+.../esbuild@0.18.20/node_modules/esbuild postinstall: Done
+
+devDependencies:
++ typescript 5.9.3 (6.0.3 is available)
+
+Done in 57.3s
+
+EXIT:0
+>>> pnpm build:packages
+
+> calorie-tracker@0.1.0 build:packages C:\Users\mammo\Projects\calorie-tracker
+> pnpm --filter @calorie-tracker/shared build && pnpm --filter @calorie-tracker/db build
+
+
+> @calorie-tracker/shared@0.1.0 build C:\Users\mammo\Projects\calorie-tracker\packages\shared
+> tsc
+
+
+> @calorie-tracker/db@0.1.0 build C:\Users\mammo\Projects\calorie-tracker\packages\db
+> tsc
+
+
+EXIT:0
+>>> pnpm --filter @calorie-tracker/api build
+
+> @calorie-tracker/api@0.1.0 build C:\Users\mammo\Projects\calorie-tracker\apps\api
+> nest build
+
+Found 7 error(s).
+
+C:\Users\mammo\Projects\calorie-tracker\apps\api:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @calorie-tracker/api@0.1.0 build: `nest build`
+Exit status 1
+
+[96msrc/foods/foods.service.ts[0m:[93m14[0m:[93m44[0m - [91merror[0m[90m TS2304: [0mCannot find name 'isNull'.
+
+[7m14[0m       where: and(eq(foods.userId, userId), isNull(foods.deletedAt)),
+[7m  [0m [91m                                           ~~~~~~[0m
+[96msrc/foods/foods.service.ts[0m:[93m21[0m:[93m62[0m - [91merror[0m[90m TS2304: [0mCannot find name 'isNull'.
+
+[7m21[0m       where: and(eq(foods.id, id), eq(foods.userId, userId), isNull(foods.deletedAt)),
+[7m  [0m [91m                                                             ~~~~~~[0m
+[96msrc/foods/foods.service.ts[0m:[93m45[0m:[93m62[0m - [91merror[0m[90m TS2304: [0mCannot find name 'isNull'.
+
+[7m45[0m       where: and(eq(foods.id, id), eq(foods.userId, userId), isNull(foods.deletedAt)),
+[7m  [0m [91m                                                             ~~~~~~[0m
+[96msrc/foods/foods.service.ts[0m:[93m87[0m:[93m9[0m - [91merror[0m[90m TS2304: [0mCannot find name 'isNull'.
+
+[7m87[0m         isNull(foods.deletedAt),
+[7m  [0m [91m        ~~~~~~[0m
+[96msrc/sync/sync.service.ts[0m:[93m44[0m:[93m59[0m - [91merror[0m[90m TS2345: [0mArgument of type 'PgTableWithColumns<{ name: "foods"; schema: undefined; columns: { id: PgColumn<{ name: "id"; tableName: "foods"; dataType: "string"; columnType: "PgUUID"; data: string; driverParam: string; notNull: true; hasDefault: true; ... 6 more ...; generated: undefined; }, {}, {}>; ... 9 more ...; deletedAt: PgColumn<...>; };...' is not assignable to parameter of type '{ updatedAt: PgColumn<{ name: "updated_at"; tableName: "macro_targets"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; ... 5 more ...; generated: undefined; }, {}, {}>; deletedAt: PgColumn<...>; userId: PgColumn<...>; }'.
+  Types of property 'updatedAt' are incompatible.
+    Type 'PgColumn<{ name: "updated_at"; tableName: "foods"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is not assignable to type 'PgColumn<{ name: "updated_at"; tableName: "macro_targets"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; ... 5 more ...; generated: undefined; }, {}, {}>'.
+      Type '{ name: "updated_at"; tableName: "foods"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }' is not assignable to type '{ name: "updated_at"; tableName: "macro_targets"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }'.
+        Types of property 'tableName' are incompatible.
+          Type '"foods"' is not assignable to type '"macro_targets"'.
+
+[7m44[0m       this.db.query.foods.findMany({ where: changedFilter(foods) }),
+[7m  [0m [91m                                                          ~~~~~[0m
+[96msrc/sync/sync.service.ts[0m:[93m45[0m:[93m69[0m - [91merror[0m[90m TS2345: [0mArgument of type 'PgTableWithColumns<{ name: "meal_plan_entries"; schema: undefined; columns: { id: PgColumn<{ name: "id"; tableName: "meal_plan_entries"; dataType: "string"; columnType: "PgUUID"; data: string; driverParam: string; notNull: true; ... 7 more ...; generated: undefined; }, {}, {}>; ... 8 more ...; deletedAt: PgColumn<.....' is not assignable to parameter of type '{ updatedAt: PgColumn<{ name: "updated_at"; tableName: "macro_targets"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; ... 5 more ...; generated: undefined; }, {}, {}>; deletedAt: PgColumn<...>; userId: PgColumn<...>; }'.
+  Types of property 'updatedAt' are incompatible.
+    Type 'PgColumn<{ name: "updated_at"; tableName: "meal_plan_entries"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; ... 5 more ...; generated: undefined; }, {}, {}>' is not assignable to type 'PgColumn<{ name: "updated_at"; tableName: "macro_targets"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; ... 5 more ...; generated: undefined; }, {}, {}>'.
+      Type '{ name: "updated_at"; tableName: "meal_plan_entries"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; ... 5 more ...; generated: undefined; }' is not assignable to type '{ name: "updated_at"; tableName: "macro_targets"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }'.
+        Types of property 'tableName' are incompatible.
+          Type '"meal_plan_entries"' is not assignable to type '"macro_targets"'.
+
+[7m45[0m       this.db.query.mealPlanEntries.findMany({ where: changedFilter(mealPlanEntries) }),
+[7m  [0m [91m                                                                    ~~~~~~~~~~~~~~~[0m
+[96msrc/sync/sync.service.ts[0m:[93m46[0m:[93m68[0m - [91merror[0m[90m TS2345: [0mArgument of type 'PgTableWithColumns<{ name: "food_log_entries"; schema: undefined; columns: { id: PgColumn<{ name: "id"; tableName: "food_log_entries"; dataType: "string"; columnType: "PgUUID"; data: string; driverParam: string; notNull: true; ... 7 more ...; generated: undefined; }, {}, {}>; ... 8 more ...; deletedAt: PgColumn<...>...' is not assignable to parameter of type '{ updatedAt: PgColumn<{ name: "updated_at"; tableName: "macro_targets"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; ... 5 more ...; generated: undefined; }, {}, {}>; deletedAt: PgColumn<...>; userId: PgColumn<...>; }'.
+  Types of property 'updatedAt' are incompatible.
+    Type 'PgColumn<{ name: "updated_at"; tableName: "food_log_entries"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; ... 5 more ...; generated: undefined; }, {}, {}>' is not assignable to type 'PgColumn<{ name: "updated_at"; tableName: "macro_targets"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; ... 5 more ...; generated: undefined; }, {}, {}>'.
+      Type '{ name: "updated_at"; tableName: "food_log_entries"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; ... 5 more ...; generated: undefined; }' is not assignable to type '{ name: "updated_at"; tableName: "macro_targets"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }'.
+        Types of property 'tableName' are incompatible.
+          Type '"food_log_entries"' is not assignable to type '"macro_targets"'.
+
+[7m46[0m       this.db.query.foodLogEntries.findMany({ where: changedFilter(foodLogEntries) }),
+[7m  [0m [91m                                                                   ~~~~~~~~~~~~~~[0m
+
+
+EXIT:1
+SUMMARY step2_install:0 step3:0 step4:1
