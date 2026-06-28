@@ -8,6 +8,9 @@
     "build": "tsc",
     "generate": "drizzle-kit generate",
     "migrate": "node scripts/migrate.js",
+    "seed:foods": "node scripts/seed-foods.js",
+    "seed:meal-plan": "node scripts/seed-weekly-meal-plan.js",
+    "update:meal-times": "node scripts/update-meal-times.js",
     "migrate:kit": "drizzle-kit migrate",
     "studio": "drizzle-kit studio"
   },

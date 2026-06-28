@@ -57,6 +57,8 @@ Open [http://localhost:5173](http://localhost:5173). The web app talks to the AP
 | `GET/PUT /api/macro-targets` | Date-specific macro targets (overrides) |
 | `GET /api/macro-targets/effective?from=&to=` | Resolved targets (override → weekly default) |
 | `GET/PUT /api/weekly-macro-targets` | Default targets by day of week (Mon–Sun) |
+| `GET/POST/PATCH/DELETE /api/weekly-meal-plans` | Weekly meal plan templates by day of week |
+| `GET /api/meal-plans/effective?date=` | Resolved meal plan (date override → weekly template) |
 | `GET/POST/PATCH/DELETE /api/foods` | Saved foods |
 | `GET /api/foods/search?q=` | USDA + Open Food Facts search |
 | `GET/POST/PATCH/DELETE /api/meal-plans` | Meal plans |

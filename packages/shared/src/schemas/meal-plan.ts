@@ -1,9 +1,8 @@
 import { z } from 'zod';
-import { MEAL_SLOTS } from '../constants';
 
 export const mealPlanEntryInputSchema = z.object({
   planDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  mealSlot: z.enum(MEAL_SLOTS),
+  dayMealId: z.string().uuid(),
   foodId: z.string().uuid(),
   quantity: z.number().positive(),
   unit: z.string().min(1).default('g'),

@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    @apply min-h-dvh bg-background text-foreground antialiased;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    @apply text-base;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl bg-surface p-4;
+  }
+
+  .btn-primary {
+    @apply rounded-lg bg-primary-dark px-4 py-3.5 font-semibold text-white transition hover:bg-primary disabled:opacity-60;
+  }
+
+  .btn-secondary {
+    @apply rounded-lg border border-border-light bg-surface px-4 py-3.5 font-semibold text-primary transition hover:bg-surface-alt;
+  }
+
+  .input-field {
+    @apply mb-2 w-full rounded-lg border border-border bg-surface px-4 py-3 text-foreground placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary;
+  }
+
+  .link {
+    @apply font-semibold text-primary hover:underline;
+  }
+}

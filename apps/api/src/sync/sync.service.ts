@@ -3,6 +3,9 @@ import { and, eq, gt, or, isNotNull } from 'drizzle-orm';
 import {
   macroTargets,
   weeklyMacroTargets,
+  weeklyMeals,
+  weeklyMealPlanEntries,
+  dayMeals,
   foods,
   mealPlanEntries,
   foodLogEntries,
@@ -13,12 +16,18 @@ import { DB } from '../database/database.module';
 import {
   serializeMacroTarget,
   serializeWeeklyMacroTarget,
+  serializeWeeklyMeal,
+  serializeDayMeal,
+  serializeWeeklyMealPlanEntry,
   serializeFood,
   serializeMealPlanEntry,
   serializeFoodLogEntry,
 } from '../common/serializers';
 import { MacroTargetsService } from '../macro-targets/macro-targets.service';
 import { WeeklyMacroTargetsService } from '../macro-targets/weekly-macro-targets.service';
+import { WeeklyMealsService } from '../meal-plans/weekly-meals.service';
+import { WeeklyMealPlansService } from '../meal-plans/weekly-meal-plans.service';
+import { DayMealsService } from '../meal-plans/day-meals.service';
 import { FoodsService } from '../foods/foods.service';
 import { MealPlansService } from '../meal-plans/meal-plans.service';
 import { FoodLogsService } from '../food-logs/food-logs.service';
@@ -29,6 +38,9 @@ export class SyncService {
     @Inject(DB) private readonly db: DbClient,
     private readonly macroTargetsService: MacroTargetsService,
     private readonly weeklyMacroTargetsService: WeeklyMacroTargetsService,
+    private readonly weeklyMealsService: WeeklyMealsService,
+    private readonly weeklyMealPlansService: WeeklyMealPlansService,
+    private readonly dayMealsService: DayMealsService,
     private readonly foodsService: FoodsService,
     private readonly mealPlansService: MealPlansService,
     private readonly foodLogsService: FoodLogsService,
@@ -42,12 +54,42 @@ export class SyncService {
         or(gt(table.updatedAt, sinceDate), isNotNull(table.deletedAt)),
       );
 
-    const [macroRows, weeklyRows, foodRows, mealRows, logRows] = await Promise.all([
+    const [
+      macroRows,
+      weeklyRows,
+      weeklyMealRows,
+      weeklyMealPlanRows,
+      dayMealRows,
+      foodRows,
+      mealRows,
+      logRows,
+    ] = await Promise.all([
       this.db.query.macroTargets.findMany({ where: changedSince(macroTargets) }),
       this.db.query.weeklyMacroTargets.findMany({
         where: and(
           eq(weeklyMacroTargets.userId, userId),
           or(gt(weeklyMacroTargets.updatedAt, sinceDate), isNotNull(weeklyMacroTargets.deletedAt)),
+        ),
+      }),
+      this.db.query.weeklyMeals.findMany({
+        where: and(
+          eq(weeklyMeals.userId, userId),
+          or(gt(weeklyMeals.updatedAt, sinceDate), isNotNull(weeklyMeals.deletedAt)),
+        ),
+      }),
+      this.db.query.weeklyMealPlanEntries.findMany({
+        where: and(
+          eq(weeklyMealPlanEntries.userId, userId),
+          or(
+            gt(weeklyMealPlanEntries.updatedAt, sinceDate),
+            isNotNull(weeklyMealPlanEntries.deletedAt),
+          ),
+        ),
+      }),
+      this.db.query.dayMeals.findMany({
+        where: and(
+          eq(dayMeals.userId, userId),
+          or(gt(dayMeals.updatedAt, sinceDate), isNotNull(dayMeals.deletedAt)),
         ),
       }),
       this.db.query.foods.findMany({
@@ -73,6 +115,9 @@ export class SyncService {
     return {
       macroTargets: macroRows.map(serializeMacroTarget),
       weeklyMacroTargets: weeklyRows.map(serializeWeeklyMacroTarget),
+      weeklyMeals: weeklyMealRows.map(serializeWeeklyMeal),
+      weeklyMealPlanEntries: weeklyMealPlanRows.map(serializeWeeklyMealPlanEntry),
+      dayMeals: dayMealRows.map(serializeDayMeal),
       foods: foodRows.map(serializeFood),
       mealPlanEntries: mealRows.map(serializeMealPlanEntry),
       foodLogEntries: logRows.map(serializeFoodLogEntry),
@@ -102,6 +147,36 @@ export class SyncService {
             results.push(
               await this.weeklyMacroTargetsService.upsert(userId, payload as never, entityId),
             );
+          }
+        } else if (entityType === 'weekly_meals') {
+          if (action === 'delete') {
+            results.push(await this.weeklyMealsService.remove(userId, entityId));
+          } else if (action === 'create') {
+            results.push(await this.weeklyMealsService.create(userId, payload as never, entityId));
+          } else {
+            results.push(
+              await this.weeklyMealsService.update(userId, entityId, payload as never),
+            );
+          }
+        } else if (entityType === 'weekly_meal_plan_entries') {
+          if (action === 'delete') {
+            results.push(await this.weeklyMealPlansService.remove(userId, entityId));
+          } else if (action === 'create') {
+            results.push(
+              await this.weeklyMealPlansService.create(userId, payload as never, entityId),
+            );
+          } else {
+            results.push(
+              await this.weeklyMealPlansService.update(userId, entityId, payload as never),
+            );
+          }
+        } else if (entityType === 'day_meals') {
+          if (action === 'delete') {
+            results.push(await this.dayMealsService.remove(userId, entityId));
+          } else if (action === 'create') {
+            results.push(await this.dayMealsService.create(userId, payload as never, entityId));
+          } else {
+            results.push(await this.dayMealsService.update(userId, entityId, payload as never));
           }
         } else if (entityType === 'foods') {
           if (action === 'delete') {

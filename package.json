@@ -12,6 +12,9 @@
     "db:generate": "pnpm --filter @calorie-tracker/db generate",
     "db:up": "docker compose up -d",
     "db:migrate": "pnpm --filter @calorie-tracker/db migrate",
+    "db:seed-foods": "pnpm --filter @calorie-tracker/db seed:foods",
+    "db:seed-meal-plan": "pnpm --filter @calorie-tracker/db seed:meal-plan",
+    "db:update-meal-times": "pnpm --filter @calorie-tracker/db update:meal-times",
     "db:studio": "pnpm --filter @calorie-tracker/db studio",
     "setup:android": "powershell -ExecutionPolicy Bypass -File scripts/setup-android.ps1",
     "android:emulator": "powershell -ExecutionPolicy Bypass -File scripts/start-android-emulator.ps1"

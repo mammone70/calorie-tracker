@@ -2,10 +2,16 @@ import type { Nutrients, ServingSize } from '@calorie-tracker/shared';
 import type {
   Food,
   MacroTarget,
-  MealPlanEntry,
   FoodLogEntry,
   WeeklyMacroTarget,
 } from '@calorie-tracker/db';
+
+export {
+  serializeWeeklyMeal,
+  serializeDayMeal,
+  serializeWeeklyMealPlanEntry,
+  serializeMealPlanEntry,
+} from './meal-serializers';
 
 export function toIso(date: Date | string | null | undefined): string | null {
   if (!date) return null;
@@ -63,30 +69,18 @@ export function serializeFood(row: Food) {
   };
 }
 
-export function serializeMealPlanEntry(row: MealPlanEntry) {
-  return {
-    id: row.id,
-    userId: row.userId,
-    planDate: toDateString(row.planDate),
-    mealSlot: row.mealSlot,
-    foodId: row.foodId,
-    quantity: Number(row.quantity),
-    unit: row.unit,
-    createdAt: toIso(row.createdAt)!,
-    updatedAt: toIso(row.updatedAt)!,
-    deletedAt: toIso(row.deletedAt),
-  };
-}
 
 export function serializeFoodLogEntry(row: FoodLogEntry) {
   return {
     id: row.id,
     userId: row.userId,
     loggedAt: toIso(row.loggedAt)!,
-    mealSlot: row.mealSlot,
+    weeklyMealId: row.weeklyMealId ?? null,
+    dayMealId: row.dayMealId ?? null,
     foodId: row.foodId,
     quantity: Number(row.quantity),
     unit: row.unit,
+    status: row.status,
     createdAt: toIso(row.createdAt)!,
     updatedAt: toIso(row.updatedAt)!,
     deletedAt: toIso(row.deletedAt),

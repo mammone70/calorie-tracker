@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   pgTable,
   uuid,
@@ -18,6 +19,8 @@ export const mealSlotEnum = pgEnum('meal_slot', [
   'dinner',
   'snack',
 ]);
+
+export const foodLogStatusEnum = pgEnum('food_log_status', ['pending', 'confirmed']);
 
 export const foodSourceEnum = pgEnum('food_source', [
   'user',
@@ -101,13 +104,77 @@ export const foods = pgTable('foods', {
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
 });
 
+export const weeklyMeals = pgTable(
+  'weekly_meals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    dayOfWeek: smallint('day_of_week').notNull(),
+    mealIndex: smallint('meal_index').notNull(),
+    name: text('name').notNull(),
+    mealTime: text('meal_time'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('weekly_meals_user_dow_index_idx')
+      .on(table.userId, table.dayOfWeek, table.mealIndex)
+      .where(sql`deleted_at IS NULL`),
+  ],
+);
+
+export const weeklyMealPlanEntries = pgTable('weekly_meal_plan_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  weeklyMealId: uuid('weekly_meal_id')
+    .notNull()
+    .references(() => weeklyMeals.id, { onDelete: 'cascade' }),
+  foodId: uuid('food_id')
+    .notNull()
+    .references(() => foods.id, { onDelete: 'cascade' }),
+  quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull(),
+  unit: text('unit').notNull().default('g'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+});
+
+export const dayMeals = pgTable(
+  'day_meals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    planDate: date('plan_date').notNull(),
+    mealIndex: smallint('meal_index').notNull(),
+    name: text('name').notNull(),
+    mealTime: text('meal_time'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('day_meals_user_date_index_idx')
+      .on(table.userId, table.planDate, table.mealIndex)
+      .where(sql`deleted_at IS NULL`),
+  ],
+);
+
 export const mealPlanEntries = pgTable('meal_plan_entries', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   planDate: date('plan_date').notNull(),
-  mealSlot: mealSlotEnum('meal_slot').notNull(),
+  dayMealId: uuid('day_meal_id')
+    .notNull()
+    .references(() => dayMeals.id, { onDelete: 'cascade' }),
   foodId: uuid('food_id')
     .notNull()
     .references(() => foods.id, { onDelete: 'cascade' }),
@@ -124,30 +191,55 @@ export const foodLogEntries = pgTable('food_log_entries', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   loggedAt: timestamp('logged_at', { withTimezone: true }).notNull(),
-  mealSlot: mealSlotEnum('meal_slot').notNull(),
+  weeklyMealId: uuid('weekly_meal_id').references(() => weeklyMeals.id, { onDelete: 'set null' }),
+  dayMealId: uuid('day_meal_id').references(() => dayMeals.id, { onDelete: 'set null' }),
   foodId: uuid('food_id')
     .notNull()
     .references(() => foods.id, { onDelete: 'cascade' }),
   quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull(),
   unit: text('unit').notNull().default('g'),
+  status: foodLogStatusEnum('status').notNull().default('confirmed'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
 });
 
+export const dailyLogMaterializations = pgTable(
+  'daily_log_materializations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    planDate: date('plan_date').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('daily_log_materializations_user_date_idx').on(table.userId, table.planDate),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type MacroTarget = typeof macroTargets.$inferSelect;
 export type WeeklyMacroTarget = typeof weeklyMacroTargets.$inferSelect;
 export type Food = typeof foods.$inferSelect;
+export type WeeklyMeal = typeof weeklyMeals.$inferSelect;
+export type WeeklyMealPlanEntry = typeof weeklyMealPlanEntries.$inferSelect;
+export type DayMeal = typeof dayMeals.$inferSelect;
 export type MealPlanEntry = typeof mealPlanEntries.$inferSelect;
 export type FoodLogEntry = typeof foodLogEntries.$inferSelect;
+export type DailyLogMaterialization = typeof dailyLogMaterializations.$inferSelect;
 
 export const schema = {
   users,
   refreshTokens,
   macroTargets,
   weeklyMacroTargets,
+  weeklyMeals,
+  weeklyMealPlanEntries,
+  dayMeals,
   foods,
   mealPlanEntries,
   foodLogEntries,
+  dailyLogMaterializations,
 };
