@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native';
+import { colors } from '../lib/theme';
 
 type MacroProgressProps = {
   label: string;
@@ -36,12 +37,12 @@ export function MacroProgress({ label, consumed, target }: MacroProgressProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: '#fff', margin: 16, padding: 16, borderRadius: 12 },
-  title: { fontSize: 18, fontWeight: '700', marginBottom: 16 },
+  container: { backgroundColor: colors.surface, margin: 16, padding: 16, borderRadius: 12 },
+  title: { fontSize: 18, fontWeight: '700', marginBottom: 16, color: colors.text },
   barContainer: { marginBottom: 14 },
   barHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  barLabel: { fontWeight: '600', color: '#334155' },
-  barValues: { color: '#64748b', fontSize: 13 },
-  barTrack: { height: 8, backgroundColor: '#e2e8f0', borderRadius: 4, overflow: 'hidden' },
-  barFill: { height: '100%', backgroundColor: '#2563eb', borderRadius: 4 },
+  barLabel: { fontWeight: '600', color: colors.textSecondary },
+  barValues: { color: colors.textMuted, fontSize: 13 },
+  barTrack: { height: 8, backgroundColor: colors.track, borderRadius: 4, overflow: 'hidden' },
+  barFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 4 },
 });

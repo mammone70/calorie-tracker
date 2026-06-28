@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import { api } from '../../lib/api';
 import type { Food } from '@calorie-tracker/shared';
 import { useAuth } from '../../contexts/AuthContext';
+import { colors } from '../../lib/theme';
 
 export default function FoodsScreen() {
   const { sync } = useAuth();
@@ -39,7 +40,7 @@ export default function FoodsScreen() {
       <FlatList
         data={data ?? []}
         keyExtractor={(item) => item.id}
-        refreshControl={<RefreshControl onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl onRefresh={onRefresh} tintColor={colors.primary} />}
         ListEmptyComponent={
           <Text style={styles.empty}>
             {isLoading ? 'Loading...' : 'No saved foods yet. Search or add manually.'}
@@ -62,28 +63,34 @@ export default function FoodsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
+  container: { flex: 1, backgroundColor: colors.background },
   header: { padding: 16, gap: 8 },
   searchButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: colors.primaryDark,
     padding: 14,
     borderRadius: 8,
     alignItems: 'center',
   },
-  searchButtonText: { color: '#fff', fontWeight: '600' },
+  searchButtonText: { color: colors.onPrimary, fontWeight: '600' },
   addButton: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     padding: 14,
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.borderLight,
   },
-  addButtonText: { color: '#2563eb', fontWeight: '600' },
-  empty: { padding: 24, textAlign: 'center', color: '#94a3b8' },
-  item: { backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 8, padding: 14, borderRadius: 8 },
-  name: { fontSize: 16, fontWeight: '600' },
-  brand: { color: '#64748b', marginTop: 2 },
-  macros: { color: '#475569', marginTop: 6, fontSize: 13 },
-  source: { color: '#94a3b8', marginTop: 4, fontSize: 12, textTransform: 'capitalize' },
+  addButtonText: { color: colors.primary, fontWeight: '600' },
+  empty: { padding: 24, textAlign: 'center', color: colors.textMuted },
+  item: {
+    backgroundColor: colors.surface,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 8,
+  },
+  name: { fontSize: 16, fontWeight: '600', color: colors.text },
+  brand: { color: colors.textMuted, marginTop: 2 },
+  macros: { color: colors.textSecondary, marginTop: 6, fontSize: 13 },
+  source: { color: colors.textMuted, marginTop: 4, fontSize: 12, textTransform: 'capitalize' },
 });

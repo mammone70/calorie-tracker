@@ -7,6 +7,7 @@ import {
   syncOutbox,
   syncMeta,
   localMacroTargets,
+  localWeeklyMacroTargets,
   localFoods,
   localMealPlanEntries,
   localFoodLogEntries,
@@ -60,6 +61,7 @@ export async function runSync() {
 
   const pull = (await api.syncPull(since)) as {
     macroTargets: Array<Record<string, unknown>>;
+    weeklyMacroTargets: Array<Record<string, unknown>>;
     foods: Array<Record<string, unknown>>;
     mealPlanEntries: Array<Record<string, unknown>>;
     foodLogEntries: Array<Record<string, unknown>>;
@@ -68,6 +70,9 @@ export async function runSync() {
 
   for (const row of pull.macroTargets) {
     await upsertLocalMacroTarget(row);
+  }
+  for (const row of pull.weeklyMacroTargets ?? []) {
+    await upsertLocalWeeklyMacroTarget(row);
   }
   for (const row of pull.foods) {
     await upsertLocalFood(row);
@@ -107,6 +112,27 @@ async function upsertLocalMacroTarget(row: Record<string, unknown>) {
 
   await db.insert(localMacroTargets).values(values).onConflictDoUpdate({
     target: localMacroTargets.id,
+    set: values,
+  });
+}
+
+async function upsertLocalWeeklyMacroTarget(row: Record<string, unknown>) {
+  const db = await getDb();
+  const values = {
+    id: row.id as string,
+    userId: row.userId as string,
+    dayOfWeek: row.dayOfWeek as number,
+    calories: row.calories as number,
+    proteinG: row.proteinG as number,
+    fatG: row.fatG as number,
+    carbsG: row.carbsG as number,
+    createdAt: row.createdAt as string,
+    updatedAt: row.updatedAt as string,
+    deletedAt: (row.deletedAt as string | null) ?? null,
+  };
+
+  await db.insert(localWeeklyMacroTargets).values(values).onConflictDoUpdate({
+    target: localWeeklyMacroTargets.id,
     set: values,
   });
 }

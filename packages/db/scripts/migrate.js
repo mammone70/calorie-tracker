@@ -32,17 +32,49 @@ const connectionString =
 
 async function main() {
   const sql = postgres(connectionString, { max: 1, connect_timeout: 5 });
-  const migrationPath = path.join(__dirname, '../drizzle/0000_initial.sql');
+  const migrationsDir = path.join(__dirname, '../drizzle');
+  const migrationFiles = fs
+    .readdirSync(migrationsDir)
+    .filter((file) => file.endsWith('.sql'))
+    .sort();
 
-  if (!fs.existsSync(migrationPath)) {
-    throw new Error(`Migration file not found: ${migrationPath}`);
+  if (migrationFiles.length === 0) {
+    throw new Error(`No migration files found in ${migrationsDir}`);
   }
 
-  const migration = fs.readFileSync(migrationPath, 'utf8');
-
   try {
-    await sql.unsafe(migration);
-    console.log('Migration applied successfully');
+    await sql.unsafe(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        filename text PRIMARY KEY,
+        applied_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+
+    const appliedRows = await sql`SELECT filename FROM schema_migrations`;
+    const applied = new Set(appliedRows.map((row) => row.filename));
+
+    if (applied.size === 0) {
+      const [existing] = await sql`SELECT to_regclass('public.users') AS reg`;
+      if (existing?.reg) {
+        await sql`INSERT INTO schema_migrations (filename) VALUES ('0000_initial.sql')`;
+        applied.add('0000_initial.sql');
+        console.log('Marked 0000_initial.sql as already applied');
+      }
+    }
+
+    for (const file of migrationFiles) {
+      if (applied.has(file)) {
+        console.log(`Skipping ${file} (already applied)`);
+        continue;
+      }
+
+      const migrationPath = path.join(migrationsDir, file);
+      const migration = fs.readFileSync(migrationPath, 'utf8');
+      await sql.unsafe(migration);
+      await sql`INSERT INTO schema_migrations (filename) VALUES (${file})`;
+      console.log(`Applied ${file}`);
+    }
+    console.log('Migrations applied successfully');
   } catch (err) {
     if (err.code === 'ECONNREFUSED' || String(err.message).includes('ECONNREFUSED')) {
       console.error(`

@@ -13,6 +13,19 @@ export const localMacroTargets = sqliteTable('macro_targets', {
   deletedAt: text('deleted_at'),
 });
 
+export const localWeeklyMacroTargets = sqliteTable('weekly_macro_targets', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  dayOfWeek: integer('day_of_week').notNull(),
+  calories: integer('calories').notNull(),
+  proteinG: real('protein_g').notNull(),
+  fatG: real('fat_g').notNull(),
+  carbsG: real('carbs_g').notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  deletedAt: text('deleted_at'),
+});
+
 export const localFoods = sqliteTable('foods', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull(),

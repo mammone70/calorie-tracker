@@ -2,6 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import { drizzle } from 'drizzle-orm/expo-sqlite';
 import {
   localMacroTargets,
+  localWeeklyMacroTargets,
   localFoods,
   localMealPlanEntries,
   localFoodLogEntries,
@@ -79,6 +80,19 @@ CREATE TABLE IF NOT EXISTS sync_meta (
   key TEXT PRIMARY KEY NOT NULL,
   value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS weekly_macro_targets (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT NOT NULL,
+  day_of_week INTEGER NOT NULL,
+  calories INTEGER NOT NULL,
+  protein_g REAL NOT NULL,
+  fat_g REAL NOT NULL,
+  carbs_g REAL NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT
+);
 `;
 
 export async function getDb() {
@@ -90,6 +104,7 @@ export async function getDb() {
   dbInstance = drizzle(sqlite, {
     schema: {
       localMacroTargets,
+      localWeeklyMacroTargets,
       localFoods,
       localMealPlanEntries,
       localFoodLogEntries,
@@ -103,6 +118,7 @@ export async function getDb() {
 
 export {
   localMacroTargets,
+  localWeeklyMacroTargets,
   localFoods,
   localMealPlanEntries,
   localFoodLogEntries,

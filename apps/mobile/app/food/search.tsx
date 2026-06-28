@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   FlatList,
   TouchableOpacity,
   Alert,
@@ -14,6 +13,8 @@ import { api } from '../../lib/api';
 import { localCreateFood, localCreateFoodLog } from '../../lib/local-store';
 import { todayDateString } from '../../lib/utils';
 import type { FoodSearchResult } from '@calorie-tracker/shared';
+import { AppTextInput } from '../../components/AppTextInput';
+import { colors } from '../../lib/theme';
 
 export default function FoodSearchScreen() {
   const [query, setQuery] = useState('');
@@ -79,7 +80,7 @@ export default function FoodSearchScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.searchRow}>
-        <TextInput
+        <AppTextInput
           style={styles.input}
           placeholder="Search USDA & Open Food Facts..."
           value={query}
@@ -123,29 +124,30 @@ export default function FoodSearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
+  container: { flex: 1, backgroundColor: colors.background },
   searchRow: { flexDirection: 'row', padding: 16, gap: 8 },
   input: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+    marginBottom: 0,
   },
   searchButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: colors.primaryDark,
     paddingHorizontal: 16,
     justifyContent: 'center',
     borderRadius: 8,
   },
-  searchButtonText: { color: '#fff', fontWeight: '600' },
-  status: { paddingHorizontal: 16, color: '#64748b' },
-  empty: { padding: 24, textAlign: 'center', color: '#94a3b8' },
-  item: { backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 8, padding: 14, borderRadius: 8 },
-  name: { fontSize: 16, fontWeight: '600' },
-  brand: { color: '#64748b', marginTop: 2 },
-  macros: { color: '#475569', marginTop: 6, fontSize: 13 },
-  source: { color: '#94a3b8', marginTop: 4, fontSize: 12, textTransform: 'capitalize' },
+  searchButtonText: { color: colors.onPrimary, fontWeight: '600' },
+  status: { paddingHorizontal: 16, color: colors.textMuted },
+  empty: { padding: 24, textAlign: 'center', color: colors.textMuted },
+  item: {
+    backgroundColor: colors.surface,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 8,
+  },
+  name: { fontSize: 16, fontWeight: '600', color: colors.text },
+  brand: { color: colors.textMuted, marginTop: 2 },
+  macros: { color: colors.textSecondary, marginTop: 6, fontSize: 13 },
+  source: { color: colors.textMuted, marginTop: 4, fontSize: 12, textTransform: 'capitalize' },
 });

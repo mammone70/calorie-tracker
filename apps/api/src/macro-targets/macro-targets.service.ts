@@ -2,12 +2,17 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, eq, gte, lte, isNull } from 'drizzle-orm';
 import { macroTargets, type DbClient } from '@calorie-tracker/db';
 import type { MacroTargetInput } from '@calorie-tracker/shared';
+import { resolveEffectiveTargetsInRange } from '@calorie-tracker/shared';
 import { DB } from '../database/database.module';
 import { serializeMacroTarget } from '../common/serializers';
+import { WeeklyMacroTargetsService } from './weekly-macro-targets.service';
 
 @Injectable()
 export class MacroTargetsService {
-  constructor(@Inject(DB) private readonly db: DbClient) {}
+  constructor(
+    @Inject(DB) private readonly db: DbClient,
+    private readonly weeklyService: WeeklyMacroTargetsService,
+  ) {}
 
   async findByRange(userId: string, from: string, to: string) {
     const rows = await this.db.query.macroTargets.findMany({
@@ -19,6 +24,14 @@ export class MacroTargetsService {
       ),
     });
     return rows.map(serializeMacroTarget);
+  }
+
+  async findEffectiveByRange(userId: string, from: string, to: string) {
+    const [overrides, weekly] = await Promise.all([
+      this.findByRange(userId, from, to),
+      this.weeklyService.findAll(userId),
+    ]);
+    return resolveEffectiveTargetsInRange(from, to, overrides, weekly);
   }
 
   async upsert(userId: string, input: MacroTargetInput, id?: string) {

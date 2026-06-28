@@ -6,6 +6,7 @@ export type FoodSource = (typeof FOOD_SOURCES)[number];
 
 export const SYNC_ENTITY_TYPES = [
   'macro_targets',
+  'weekly_macro_targets',
   'foods',
   'meal_plan_entries',
   'food_log_entries',

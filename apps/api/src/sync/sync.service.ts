@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, gt, or, isNotNull } from 'drizzle-orm';
 import {
   macroTargets,
+  weeklyMacroTargets,
   foods,
   mealPlanEntries,
   foodLogEntries,
@@ -11,11 +12,13 @@ import type { SyncPushInput } from '@calorie-tracker/shared';
 import { DB } from '../database/database.module';
 import {
   serializeMacroTarget,
+  serializeWeeklyMacroTarget,
   serializeFood,
   serializeMealPlanEntry,
   serializeFoodLogEntry,
 } from '../common/serializers';
 import { MacroTargetsService } from '../macro-targets/macro-targets.service';
+import { WeeklyMacroTargetsService } from '../macro-targets/weekly-macro-targets.service';
 import { FoodsService } from '../foods/foods.service';
 import { MealPlansService } from '../meal-plans/meal-plans.service';
 import { FoodLogsService } from '../food-logs/food-logs.service';
@@ -25,6 +28,7 @@ export class SyncService {
   constructor(
     @Inject(DB) private readonly db: DbClient,
     private readonly macroTargetsService: MacroTargetsService,
+    private readonly weeklyMacroTargetsService: WeeklyMacroTargetsService,
     private readonly foodsService: FoodsService,
     private readonly mealPlansService: MealPlansService,
     private readonly foodLogsService: FoodLogsService,
@@ -38,8 +42,14 @@ export class SyncService {
         or(gt(table.updatedAt, sinceDate), isNotNull(table.deletedAt)),
       );
 
-    const [macroRows, foodRows, mealRows, logRows] = await Promise.all([
+    const [macroRows, weeklyRows, foodRows, mealRows, logRows] = await Promise.all([
       this.db.query.macroTargets.findMany({ where: changedSince(macroTargets) }),
+      this.db.query.weeklyMacroTargets.findMany({
+        where: and(
+          eq(weeklyMacroTargets.userId, userId),
+          or(gt(weeklyMacroTargets.updatedAt, sinceDate), isNotNull(weeklyMacroTargets.deletedAt)),
+        ),
+      }),
       this.db.query.foods.findMany({
         where: and(
           eq(foods.userId, userId),
@@ -62,6 +72,7 @@ export class SyncService {
 
     return {
       macroTargets: macroRows.map(serializeMacroTarget),
+      weeklyMacroTargets: weeklyRows.map(serializeWeeklyMacroTarget),
       foods: foodRows.map(serializeFood),
       mealPlanEntries: mealRows.map(serializeMealPlanEntry),
       foodLogEntries: logRows.map(serializeFoodLogEntry),
@@ -82,6 +93,14 @@ export class SyncService {
           } else {
             results.push(
               await this.macroTargetsService.upsert(userId, payload as never, entityId),
+            );
+          }
+        } else if (entityType === 'weekly_macro_targets') {
+          if (action === 'delete') {
+            results.push(await this.weeklyMacroTargetsService.remove(userId, entityId));
+          } else {
+            results.push(
+              await this.weeklyMacroTargetsService.upsert(userId, payload as never, entityId),
             );
           }
         } else if (entityType === 'foods') {

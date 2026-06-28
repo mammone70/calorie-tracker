@@ -3,12 +3,18 @@ import { v4 as uuidv4 } from 'uuid';
 import {
   getDb,
   localMacroTargets,
+  localWeeklyMacroTargets,
   localFoods,
   localMealPlanEntries,
   localFoodLogEntries,
 } from './db';
 import { queueMutation, runSync } from './sync';
-import type { CreateFoodInput, MacroTargetInput, FoodLogEntryInput } from '@calorie-tracker/shared';
+import type {
+  CreateFoodInput,
+  MacroTargetInput,
+  FoodLogEntryInput,
+  WeeklyMacroTargetInput,
+} from '@calorie-tracker/shared';
 
 export async function localUpsertMacroTarget(userId: string, input: MacroTargetInput) {
   const db = await getDb();
@@ -56,6 +62,80 @@ export async function localUpsertMacroTarget(userId: string, input: MacroTargetI
     await runSync();
   } catch {
     // Offline — outbox will sync later
+  }
+
+  return record;
+}
+
+export async function localRemoveMacroTarget(userId: string, id: string) {
+  const db = await getDb();
+  const now = new Date().toISOString();
+
+  await db
+    .update(localMacroTargets)
+    .set({ deletedAt: now, updatedAt: now })
+    .where(eq(localMacroTargets.id, id));
+
+  await queueMutation({
+    entityType: 'macro_targets',
+    entityId: id,
+    action: 'delete',
+    clientUpdatedAt: now,
+  });
+
+  try {
+    await runSync();
+  } catch {
+    // queued for later
+  }
+}
+
+export async function localUpsertWeeklyMacroTarget(userId: string, input: WeeklyMacroTargetInput) {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  const id = uuidv4();
+
+  const existing = await db
+    .select()
+    .from(localWeeklyMacroTargets)
+    .where(
+      and(
+        eq(localWeeklyMacroTargets.userId, userId),
+        eq(localWeeklyMacroTargets.dayOfWeek, input.dayOfWeek),
+        isNull(localWeeklyMacroTargets.deletedAt),
+      ),
+    );
+
+  const record = {
+    id: existing[0]?.id ?? id,
+    userId,
+    dayOfWeek: input.dayOfWeek,
+    calories: input.calories,
+    proteinG: input.proteinG,
+    fatG: input.fatG,
+    carbsG: input.carbsG,
+    createdAt: existing[0]?.createdAt ?? now,
+    updatedAt: now,
+    deletedAt: null as string | null,
+  };
+
+  await db.insert(localWeeklyMacroTargets).values(record).onConflictDoUpdate({
+    target: localWeeklyMacroTargets.id,
+    set: record,
+  });
+
+  await queueMutation({
+    entityType: 'weekly_macro_targets',
+    entityId: record.id,
+    action: existing[0] ? 'update' : 'create',
+    payload: input as unknown as Record<string, unknown>,
+    clientUpdatedAt: now,
+  });
+
+  try {
+    await runSync();
+  } catch {
+    // queued for later
   }
 
   return record;
@@ -148,6 +228,16 @@ export async function localGetMacroTargets(userId: string, from: string, to: str
         lte(localMacroTargets.targetDate, to),
         isNull(localMacroTargets.deletedAt),
       ),
+    );
+}
+
+export async function localGetWeeklyMacroTargets(userId: string) {
+  const db = await getDb();
+  return db
+    .select()
+    .from(localWeeklyMacroTargets)
+    .where(
+      and(eq(localWeeklyMacroTargets.userId, userId), isNull(localWeeklyMacroTargets.deletedAt)),
     );
 }
 

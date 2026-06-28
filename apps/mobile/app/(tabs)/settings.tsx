@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
+import { colors } from '../../lib/theme';
 
 export default function SettingsScreen() {
   const { logout, sync } = useAuth();
@@ -21,6 +22,11 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity style={styles.item} onPress={() => router.push('/weekly-targets')}>
+        <Text style={styles.itemText}>Weekly macro defaults</Text>
+        <Text style={styles.itemHint}>Set default targets for each day of the week</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity style={styles.item} onPress={handleSync}>
         <Text style={styles.itemText}>Sync now</Text>
         <Text style={styles.itemHint}>Push local changes and pull updates</Text>
@@ -34,17 +40,17 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc', padding: 16 },
+  container: { flex: 1, backgroundColor: colors.background, padding: 16 },
   item: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     padding: 16,
     borderRadius: 8,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.borderLight,
   },
-  itemText: { fontSize: 16, fontWeight: '600' },
-  itemHint: { color: '#64748b', marginTop: 4, fontSize: 13 },
-  danger: { borderColor: '#fecaca' },
-  dangerText: { color: '#dc2626' },
+  itemText: { fontSize: 16, fontWeight: '600', color: colors.text },
+  itemHint: { color: colors.textMuted, marginTop: 4, fontSize: 13 },
+  danger: { borderColor: colors.dangerBorder },
+  dangerText: { color: colors.danger },
 });

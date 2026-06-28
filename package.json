@@ -4,8 +4,9 @@
   "version": "0.1.0",
   "scripts": {
     "setup": "node scripts/setup-assets.js && pnpm install && pnpm build:packages",
-    "build:packages": "pnpm --filter @calorie-tracker/shared build && pnpm --filter @calorie-tracker/db build",
+    "build:packages": "pnpm --filter @calorie-tracker/shared build && pnpm --filter @calorie-tracker/db build && pnpm --filter @calorie-tracker/client build",
     "dev:api": "pnpm --filter @calorie-tracker/api dev",
+    "dev:web": "pnpm --filter @calorie-tracker/web dev",
     "dev:mobile": "pnpm --filter @calorie-tracker/mobile start",
     "build": "pnpm -r build",
     "db:generate": "pnpm --filter @calorie-tracker/db generate",

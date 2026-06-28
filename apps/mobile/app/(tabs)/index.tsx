@@ -3,17 +3,18 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl } 
 import { router } from 'expo-router';
 import { api } from '../../lib/api';
 import { todayDateString, computeNutrients, sumNutrients } from '../../lib/utils';
-import type { Food, FoodLogEntry, MacroTarget, Nutrients } from '@calorie-tracker/shared';
+import type { EffectiveMacroTarget, Food, FoodLogEntry, Nutrients } from '@calorie-tracker/shared';
 import { useAuth } from '../../contexts/AuthContext';
 import { MacroProgress } from '../../components/MacroProgress';
+import { colors } from '../../lib/theme';
 
 export default function TodayScreen() {
   const today = todayDateString();
   const { sync } = useAuth();
 
   const targetsQuery = useQuery({
-    queryKey: ['macro-targets', today],
-    queryFn: () => api.getMacroTargets(today, today) as Promise<MacroTarget[]>,
+    queryKey: ['macro-targets-effective', today],
+    queryFn: () => api.getEffectiveMacroTargets(today, today) as Promise<EffectiveMacroTarget[]>,
   });
 
   const logsQuery = useQuery({
@@ -27,6 +28,7 @@ export default function TodayScreen() {
   });
 
   const target = targetsQuery.data?.[0];
+  const hasTarget = target && target.source !== 'none';
   const foodsMap = new Map((foodsQuery.data ?? []).map((f) => [f.id, f]));
 
   const consumed: Nutrients = sumNutrients(
@@ -47,26 +49,29 @@ export default function TodayScreen() {
   return (
     <ScrollView
       style={styles.container}
-      refreshControl={<RefreshControl onRefresh={onRefresh} />}
+      refreshControl={<RefreshControl onRefresh={onRefresh} tintColor={colors.primary} />}
     >
       <Text style={styles.date}>{today}</Text>
 
-      {target ? (
+      {hasTarget ? (
         <MacroProgress
           label="Today's Progress"
           consumed={consumed}
           target={{
-            calories: target.calories,
-            protein: target.proteinG,
-            fat: target.fatG,
-            carbs: target.carbsG,
+            calories: target!.calories,
+            protein: target!.proteinG,
+            fat: target!.fatG,
+            carbs: target!.carbsG,
           }}
         />
       ) : (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>No macro target set</Text>
-          <TouchableOpacity onPress={() => router.push(`/day/${today}`)}>
-            <Text style={styles.link}>Set targets for today</Text>
+          <TouchableOpacity onPress={() => router.push('/weekly-targets')}>
+            <Text style={styles.link}>Set weekly defaults</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push(`/day/${today}`)} style={{ marginTop: 8 }}>
+            <Text style={styles.link}>Set target for today</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -104,26 +109,26 @@ export default function TodayScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  date: { fontSize: 14, color: '#64748b', padding: 16, paddingBottom: 0 },
-  card: { backgroundColor: '#fff', margin: 16, padding: 16, borderRadius: 12 },
-  cardTitle: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
-  link: { color: '#2563eb', fontWeight: '600' },
+  container: { flex: 1, backgroundColor: colors.background },
+  date: { fontSize: 14, color: colors.textMuted, padding: 16, paddingBottom: 0 },
+  card: { backgroundColor: colors.surface, margin: 16, padding: 16, borderRadius: 12 },
+  cardTitle: { fontSize: 16, fontWeight: '600', marginBottom: 8, color: colors.text },
+  link: { color: colors.primary, fontWeight: '600' },
   section: { margin: 16, marginTop: 0 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: '700' },
-  empty: { color: '#94a3b8', fontStyle: 'italic' },
-  logItem: { backgroundColor: '#fff', padding: 12, borderRadius: 8, marginBottom: 8 },
-  logName: { fontSize: 16, fontWeight: '600' },
-  logMeta: { color: '#64748b', marginTop: 4, textTransform: 'capitalize' },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
+  empty: { color: colors.textMuted, fontStyle: 'italic' },
+  logItem: { backgroundColor: colors.surface, padding: 12, borderRadius: 8, marginBottom: 8 },
+  logName: { fontSize: 16, fontWeight: '600', color: colors.text },
+  logMeta: { color: colors.textMuted, marginTop: 4, textTransform: 'capitalize' },
   dayButton: {
     margin: 16,
     padding: 14,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.borderLight,
   },
-  dayButtonText: { color: '#2563eb', fontWeight: '600' },
+  dayButtonText: { color: colors.primary, fontWeight: '600' },
 });

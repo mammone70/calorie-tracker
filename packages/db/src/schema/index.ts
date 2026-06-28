@@ -9,6 +9,7 @@ import {
   jsonb,
   pgEnum,
   uniqueIndex,
+  smallint,
 } from 'drizzle-orm/pg-core';
 
 export const mealSlotEnum = pgEnum('meal_slot', [
@@ -60,6 +61,27 @@ export const macroTargets = pgTable(
   },
   (table) => [
     uniqueIndex('macro_targets_user_date_idx').on(table.userId, table.targetDate),
+  ],
+);
+
+export const weeklyMacroTargets = pgTable(
+  'weekly_macro_targets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    dayOfWeek: smallint('day_of_week').notNull(),
+    calories: integer('calories').notNull(),
+    proteinG: numeric('protein_g', { precision: 8, scale: 2 }).notNull(),
+    fatG: numeric('fat_g', { precision: 8, scale: 2 }).notNull(),
+    carbsG: numeric('carbs_g', { precision: 8, scale: 2 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('weekly_macro_targets_user_dow_idx').on(table.userId, table.dayOfWeek),
   ],
 );
 
@@ -115,6 +137,7 @@ export const foodLogEntries = pgTable('food_log_entries', {
 
 export type User = typeof users.$inferSelect;
 export type MacroTarget = typeof macroTargets.$inferSelect;
+export type WeeklyMacroTarget = typeof weeklyMacroTargets.$inferSelect;
 export type Food = typeof foods.$inferSelect;
 export type MealPlanEntry = typeof mealPlanEntries.$inferSelect;
 export type FoodLogEntry = typeof foodLogEntries.$inferSelect;
@@ -123,6 +146,7 @@ export const schema = {
   users,
   refreshTokens,
   macroTargets,
+  weeklyMacroTargets,
   foods,
   mealPlanEntries,
   foodLogEntries,

@@ -1,12 +1,20 @@
 import { z } from 'zod';
+import { macroCaloriesError } from '../macro-calories';
 import { FOOD_SOURCES } from '../constants';
 
-export const nutrientsSchema = z.object({
-  calories: z.number().nonnegative(),
-  protein: z.number().nonnegative(),
-  fat: z.number().nonnegative(),
-  carbs: z.number().nonnegative(),
-});
+export const nutrientsSchema = z
+  .object({
+    calories: z.number().nonnegative(),
+    protein: z.number().nonnegative(),
+    fat: z.number().nonnegative(),
+    carbs: z.number().nonnegative(),
+  })
+  .superRefine((data, ctx) => {
+    const error = macroCaloriesError(data.calories, data.protein, data.fat, data.carbs);
+    if (error) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: error });
+    }
+  });
 
 export const servingSizeSchema = z.object({
   label: z.string(),

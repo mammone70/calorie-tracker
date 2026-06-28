@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -6,21 +6,23 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TextInput,
   TouchableOpacity,
   Alert,
 } from 'react-native';
 import { api } from '../../lib/api';
-import { localUpsertMacroTarget } from '../../lib/local-store';
+import { localRemoveMacroTarget, localUpsertMacroTarget } from '../../lib/local-store';
 import { computeNutrients, sumNutrients } from '../../lib/utils';
 import type {
+  EffectiveMacroTarget,
   Food,
   FoodLogEntry,
-  MacroTarget,
   MealPlanEntry,
   Nutrients,
 } from '@calorie-tracker/shared';
+import { WEEKDAYS } from '@calorie-tracker/shared';
 import { MacroProgress } from '../../components/MacroProgress';
+import { AppTextInput } from '../../components/AppTextInput';
+import { colors } from '../../lib/theme';
 
 type Tab = 'targets' | 'plan' | 'log';
 
@@ -34,9 +36,10 @@ export default function DayDetailScreen() {
   const [fat, setFat] = useState('');
   const [carbs, setCarbs] = useState('');
 
-  const targetsQuery = useQuery({
-    queryKey: ['macro-targets', date],
-    queryFn: () => api.getMacroTargets(date!, date!) as Promise<MacroTarget[]>,
+  const effectiveQuery = useQuery({
+    queryKey: ['macro-targets-effective', date],
+    queryFn: () =>
+      api.getEffectiveMacroTargets(date!, date!) as Promise<EffectiveMacroTarget[]>,
     enabled: !!date,
   });
 
@@ -57,8 +60,16 @@ export default function DayDetailScreen() {
     queryFn: () => api.getFoods() as Promise<Food[]>,
   });
 
-  const target = targetsQuery.data?.[0];
+  const effective = effectiveQuery.data?.[0];
   const foodsMap = new Map((foodsQuery.data ?? []).map((f) => [f.id, f]));
+
+  useEffect(() => {
+    if (!effective || effective.source === 'none') return;
+    setCalories(String(effective.calories));
+    setProtein(String(effective.proteinG));
+    setFat(String(effective.fatG));
+    setCarbs(String(effective.carbsG));
+  }, [effective?.targetDate, effective?.source, effective?.calories]);
 
   const computeEntries = (entries: Array<{ foodId: string; quantity: number; unit: string }>) =>
     sumNutrients(
@@ -73,39 +84,84 @@ export default function DayDetailScreen() {
   const consumed = computeEntries(logsQuery.data ?? []);
   const planned = computeEntries(planQuery.data ?? []);
 
-  const saveTargets = async () => {
+  const saveOverride = async () => {
     if (!date) return;
     try {
       const userId = api.getUserId();
+      const input = {
+        targetDate: date,
+        calories: Number(calories) || 0,
+        proteinG: Number(protein) || 0,
+        fatG: Number(fat) || 0,
+        carbsG: Number(carbs) || 0,
+      };
+
       if (userId) {
-        await localUpsertMacroTarget(userId, {
-          targetDate: date,
-          calories: Number(calories) || 0,
-          proteinG: Number(protein) || 0,
-          fatG: Number(fat) || 0,
-          carbsG: Number(carbs) || 0,
-        });
+        await localUpsertMacroTarget(userId, input);
       } else {
-        await api.upsertMacroTarget({
-          targetDate: date,
-          calories: Number(calories) || 0,
-          proteinG: Number(protein) || 0,
-          fatG: Number(fat) || 0,
-          carbsG: Number(carbs) || 0,
-        });
+        await api.upsertMacroTarget(input);
       }
-      await queryClient.invalidateQueries({ queryKey: ['macro-targets'] });
-      Alert.alert('Saved', 'Macro targets updated');
+
+      await queryClient.invalidateQueries({ queryKey: ['macro-targets-effective'] });
+      Alert.alert('Saved', 'Custom target saved for this day');
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to save');
     }
   };
 
+  const resetToWeeklyDefault = async () => {
+    if (!effective?.overrideId) return;
+    try {
+      const userId = api.getUserId();
+      if (userId) {
+        await localRemoveMacroTarget(userId, effective.overrideId);
+      } else {
+        await api.deleteMacroTarget(effective.overrideId);
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['macro-targets-effective'] });
+
+      if (effective.weeklyDayOfWeek !== undefined) {
+        const weeklyQuery = await api.getWeeklyMacroTargets() as Array<{
+          dayOfWeek: number;
+          calories: number;
+          proteinG: number;
+          fatG: number;
+          carbsG: number;
+        }>;
+        const weekly = weeklyQuery.find((row) => row.dayOfWeek === effective.weeklyDayOfWeek);
+        if (weekly) {
+          setCalories(String(weekly.calories));
+          setProtein(String(weekly.proteinG));
+          setFat(String(weekly.fatG));
+          setCarbs(String(weekly.carbsG));
+        } else {
+          setCalories('');
+          setProtein('');
+          setFat('');
+          setCarbs('');
+        }
+      }
+
+      Alert.alert('Reset', 'This day now uses the weekly default target');
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to reset');
+    }
+  };
+
   if (!date) return null;
+
+  const sourceLabel =
+    effective?.source === 'override'
+      ? 'Custom override for this date'
+      : effective?.source === 'weekly'
+        ? `Weekly default (${WEEKDAYS[effective.weeklyDayOfWeek ?? 0]})`
+        : 'No target set';
 
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.date}>{date}</Text>
+      <Text style={styles.source}>{sourceLabel}</Text>
 
       <View style={styles.tabs}>
         {(['targets', 'plan', 'log'] as Tab[]).map((t) => (
@@ -123,51 +179,60 @@ export default function DayDetailScreen() {
 
       {tab === 'targets' && (
         <View style={styles.section}>
-          {target && (
+          {effective && effective.source !== 'none' && (
             <MacroProgress
               label="Progress vs Target"
               consumed={consumed}
               target={{
-                calories: target.calories,
-                protein: target.proteinG,
-                fat: target.fatG,
-                carbs: target.carbsG,
+                calories: effective.calories,
+                protein: effective.proteinG,
+                fat: effective.fatG,
+                carbs: effective.carbsG,
               }}
             />
           )}
 
-          <Text style={styles.sectionTitle}>Set Macro Targets</Text>
-          <TextInput
+          <Text style={styles.sectionTitle}>Set target for this day</Text>
+          <Text style={styles.hint}>
+            Saving here creates a one-off override. Leave unchanged to keep using the weekly
+            default.
+          </Text>
+          <AppTextInput
             style={styles.input}
-            placeholder={`Calories${target ? ` (current: ${target.calories})` : ''}`}
+            placeholder="Calories"
             keyboardType="numeric"
             value={calories}
             onChangeText={setCalories}
           />
-          <TextInput
+          <AppTextInput
             style={styles.input}
-            placeholder={`Protein (g)${target ? ` (current: ${target.proteinG})` : ''}`}
+            placeholder="Protein (g)"
             keyboardType="numeric"
             value={protein}
             onChangeText={setProtein}
           />
-          <TextInput
+          <AppTextInput
             style={styles.input}
-            placeholder={`Fat (g)${target ? ` (current: ${target.fatG})` : ''}`}
+            placeholder="Fat (g)"
             keyboardType="numeric"
             value={fat}
             onChangeText={setFat}
           />
-          <TextInput
+          <AppTextInput
             style={styles.input}
-            placeholder={`Carbs (g)${target ? ` (current: ${target.carbsG})` : ''}`}
+            placeholder="Carbs (g)"
             keyboardType="numeric"
             value={carbs}
             onChangeText={setCarbs}
           />
-          <TouchableOpacity style={styles.button} onPress={saveTargets}>
-            <Text style={styles.buttonText}>Save Targets</Text>
+          <TouchableOpacity style={styles.button} onPress={saveOverride}>
+            <Text style={styles.buttonText}>Save custom target</Text>
           </TouchableOpacity>
+          {effective?.source === 'override' && (
+            <TouchableOpacity style={styles.secondaryButton} onPress={resetToWeeklyDefault}>
+              <Text style={styles.secondaryButtonText}>Use weekly default instead</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -226,45 +291,49 @@ function TotalsSummary({ label, nutrients }: { label: string; nutrients: Nutrien
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  date: { fontSize: 20, fontWeight: '700', padding: 16, paddingBottom: 8 },
+  container: { flex: 1, backgroundColor: colors.background },
+  date: { fontSize: 20, fontWeight: '700', padding: 16, paddingBottom: 4, color: colors.text },
+  source: { paddingHorizontal: 16, color: colors.textMuted, marginBottom: 8 },
   tabs: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 8 },
   tab: {
     flex: 1,
     padding: 10,
     borderRadius: 8,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.borderLight,
   },
-  tabActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  tabText: { fontWeight: '600', color: '#64748b' },
-  tabTextActive: { color: '#fff' },
+  tabActive: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  tabText: { fontWeight: '600', color: colors.textMuted },
+  tabTextActive: { color: colors.onPrimary },
   section: { padding: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    fontSize: 16,
-  },
+  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8, color: colors.text },
+  hint: { color: colors.textMuted, marginBottom: 12, lineHeight: 20 },
+  input: { marginBottom: 8 },
   button: {
-    backgroundColor: '#2563eb',
+    backgroundColor: colors.primaryDark,
     padding: 14,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
   },
-  buttonText: { color: '#fff', fontWeight: '600' },
-  entry: { backgroundColor: '#fff', padding: 12, borderRadius: 8, marginBottom: 8 },
-  entryName: { fontWeight: '600', fontSize: 15 },
-  entryMeta: { color: '#64748b', marginTop: 4, textTransform: 'capitalize' },
-  empty: { color: '#94a3b8', fontStyle: 'italic' },
-  totals: { backgroundColor: '#fff', padding: 12, borderRadius: 8, marginBottom: 12 },
-  totalsLabel: { fontWeight: '600', marginBottom: 4 },
-  totalsValues: { color: '#475569' },
+  buttonText: { color: colors.onPrimary, fontWeight: '600' },
+  secondaryButton: {
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  secondaryButtonText: { color: colors.textSecondary, fontWeight: '600' },
+  entry: { backgroundColor: colors.surface, padding: 12, borderRadius: 8, marginBottom: 8 },
+  entryName: { fontWeight: '600', fontSize: 15, color: colors.text },
+  entryMeta: { color: colors.textMuted, marginTop: 4, textTransform: 'capitalize' },
+  empty: { color: colors.textMuted, fontStyle: 'italic' },
+  totals: { backgroundColor: colors.surface, padding: 12, borderRadius: 8, marginBottom: 12 },
+  totalsLabel: { fontWeight: '600', marginBottom: 4, color: colors.text },
+  totalsValues: { color: colors.textSecondary },
 });

@@ -115,8 +115,24 @@ class ApiClient {
     return this.request(`/macro-targets?from=${from}&to=${to}`);
   }
 
+  getEffectiveMacroTargets(from: string, to: string) {
+    return this.request(`/macro-targets/effective?from=${from}&to=${to}`);
+  }
+
   upsertMacroTarget(body: unknown) {
     return this.request('/macro-targets', { method: 'PUT', body });
+  }
+
+  deleteMacroTarget(id: string) {
+    return this.request(`/macro-targets/${id}`, { method: 'DELETE' });
+  }
+
+  getWeeklyMacroTargets() {
+    return this.request('/weekly-macro-targets');
+  }
+
+  upsertWeeklyMacroTarget(body: unknown) {
+    return this.request('/weekly-macro-targets', { method: 'PUT', body });
   }
 
   getFoods() {

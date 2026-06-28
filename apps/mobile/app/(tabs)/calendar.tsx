@@ -4,7 +4,8 @@ import { View, StyleSheet, Text } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { router } from 'expo-router';
 import { api } from '../../lib/api';
-import type { MacroTarget } from '@calorie-tracker/shared';
+import { colors } from '../../lib/theme';
+import type { EffectiveMacroTarget } from '@calorie-tracker/shared';
 
 export default function CalendarScreen() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -13,20 +14,26 @@ export default function CalendarScreen() {
   const to = `${selectedMonth}-31`;
 
   const { data: targets } = useQuery({
-    queryKey: ['macro-targets', from, to],
-    queryFn: () => api.getMacroTargets(from, to) as Promise<MacroTarget[]>,
+    queryKey: ['macro-targets-effective', from, to],
+    queryFn: () => api.getEffectiveMacroTargets(from, to) as Promise<EffectiveMacroTarget[]>,
   });
 
   const markedDates = (targets ?? []).reduce<
     Record<string, { marked: boolean; dotColor: string; selectedColor?: string }>
   >((acc, target) => {
-    acc[target.targetDate] = { marked: true, dotColor: '#2563eb' };
+    if (target.source === 'none') return acc;
+    acc[target.targetDate] = {
+      marked: true,
+      dotColor: target.source === 'override' ? colors.dotOverride : colors.dotWeekly,
+    };
     return acc;
   }, {});
 
   return (
     <View style={styles.container}>
-      <Text style={styles.hint}>Tap a day to view or edit targets, meal plan, and logs</Text>
+      <Text style={styles.hint}>
+        Tap a day to view or edit targets. Blue dot = weekly default, red dot = custom override.
+      </Text>
       <Calendar
         markedDates={markedDates}
         onDayPress={(day) => router.push(`/day/${day.dateString}`)}
@@ -35,8 +42,15 @@ export default function CalendarScreen() {
           setSelectedMonth(monthStr);
         }}
         theme={{
-          todayTextColor: '#2563eb',
-          arrowColor: '#2563eb',
+          backgroundColor: colors.background,
+          calendarBackground: colors.background,
+          textSectionTitleColor: colors.textMuted,
+          selectedDayBackgroundColor: colors.primary,
+          todayTextColor: colors.primary,
+          dayTextColor: colors.text,
+          textDisabledColor: colors.textMuted,
+          arrowColor: colors.primary,
+          monthTextColor: colors.text,
         }}
       />
     </View>
@@ -44,6 +58,6 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', paddingTop: 8 },
-  hint: { padding: 16, color: '#64748b', fontSize: 14 },
+  container: { flex: 1, backgroundColor: colors.background, paddingTop: 8 },
+  hint: { padding: 16, color: colors.textMuted, fontSize: 14 },
 });

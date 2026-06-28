@@ -4,6 +4,7 @@ import type {
   MacroTarget,
   MealPlanEntry,
   FoodLogEntry,
+  WeeklyMacroTarget,
 } from '@calorie-tracker/db';
 
 export function toIso(date: Date | string | null | undefined): string | null {
@@ -21,6 +22,21 @@ export function serializeMacroTarget(row: MacroTarget) {
     id: row.id,
     userId: row.userId,
     targetDate: toDateString(row.targetDate),
+    calories: row.calories,
+    proteinG: Number(row.proteinG),
+    fatG: Number(row.fatG),
+    carbsG: Number(row.carbsG),
+    createdAt: toIso(row.createdAt)!,
+    updatedAt: toIso(row.updatedAt)!,
+    deletedAt: toIso(row.deletedAt),
+  };
+}
+
+export function serializeWeeklyMacroTarget(row: WeeklyMacroTarget) {
+  return {
+    id: row.id,
+    userId: row.userId,
+    dayOfWeek: row.dayOfWeek,
     calories: row.calories,
     proteinG: Number(row.proteinG),
     fatG: Number(row.fatG),

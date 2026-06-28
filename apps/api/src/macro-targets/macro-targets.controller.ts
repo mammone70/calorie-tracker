@@ -23,6 +23,14 @@ import { MacroTargetsService } from './macro-targets.service';
 export class MacroTargetsController {
   constructor(private readonly service: MacroTargetsService) {}
 
+  @Get('effective')
+  findEffective(
+    @Req() req: { user: AuthUser },
+    @Query(zodPipe(macroTargetQuerySchema)) query: { from: string; to: string },
+  ) {
+    return this.service.findEffectiveByRange(req.user.userId, query.from, query.to);
+  }
+
   @Get()
   findByRange(
     @Req() req: { user: AuthUser },
