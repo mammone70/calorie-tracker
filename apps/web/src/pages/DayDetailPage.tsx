@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MacroProgress } from '../components/MacroProgress';
 import { MacroCaloriesFeedback, MacroCaloriesInput } from '../components/MacroCaloriesFeedback';
 import { confirmedFoodLogs } from '@calorie-tracker/shared';
@@ -8,6 +11,7 @@ import { DailyFoodLog, ensureWeeklyMealsForDate } from '../components/DailyFoodL
 import { PageHeader } from '../components/PageHeader';
 import { useMacroCaloriesValidation } from '../hooks/useMacroCaloriesValidation';
 import { api, localStore } from '../lib/client';
+import { cn } from '@/lib/utils';
 import { computeNutrients, sumNutrients } from '@calorie-tracker/client';
 import type {
   EffectiveMacroTarget,
@@ -16,19 +20,18 @@ import type {
   FoodLogEntry,
   Nutrients,
 } from '@calorie-tracker/shared';
-import { WEEKDAYS, dayOfWeekFromDate, formatMealTime, macroCaloriesError } from '@calorie-tracker/shared';
+import { WEEKDAYS, dayOfWeekFromDate, formatMealTime, formatNutrientsSummary, macroCaloriesError, roundMacroValue } from '@calorie-tracker/shared';
 
 type Tab = 'targets' | 'plan' | 'log';
 
 function TotalsSummary({ label, nutrients }: { label: string; nutrients: Nutrients }) {
   return (
-    <div className="card mb-3">
-      <p className="mb-1 font-semibold">{label}</p>
-      <p className="text-foreground-secondary">
-        {nutrients.calories} cal · P {nutrients.protein}g · F {nutrients.fat}g · C{' '}
-        {nutrients.carbs}g
-      </p>
-    </div>
+    <Card className="mb-3 w-full">
+      <CardContent>
+        <p className="mb-1 font-semibold">{label}</p>
+        <p className="text-muted-foreground">{formatNutrientsSummary(nutrients)}</p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -78,10 +81,10 @@ export function DayDetailPage() {
 
   useEffect(() => {
     if (!effective || effective.source === 'none') return;
-    setCalories(String(effective.calories));
-    setProtein(String(effective.proteinG));
-    setFat(String(effective.fatG));
-    setCarbs(String(effective.carbsG));
+    setCalories(String(roundMacroValue(effective.calories)));
+    setProtein(String(roundMacroValue(effective.proteinG)));
+    setFat(String(roundMacroValue(effective.fatG)));
+    setCarbs(String(roundMacroValue(effective.carbsG)));
   }, [effective?.targetDate, effective?.source, effective?.calories]);
 
   const computeEntries = (entries: Array<{ foodId: string; quantity: number; unit: string }>) =>
@@ -187,10 +190,10 @@ export function DayDetailPage() {
         }>;
         const weekly = weeklyQuery.find((row) => row.dayOfWeek === effective.weeklyDayOfWeek);
         if (weekly) {
-          setCalories(String(weekly.calories));
-          setProtein(String(weekly.proteinG));
-          setFat(String(weekly.fatG));
-          setCarbs(String(weekly.carbsG));
+          setCalories(String(roundMacroValue(weekly.calories)));
+          setProtein(String(roundMacroValue(weekly.proteinG)));
+          setFat(String(roundMacroValue(weekly.fatG)));
+          setCarbs(String(roundMacroValue(weekly.carbsG)));
         } else {
           setCalories('');
           setProtein('');
@@ -224,35 +227,24 @@ export function DayDetailPage() {
   return (
     <div>
       <PageHeader title="Day" backTo="/calendar" />
-      <div className="mx-auto max-w-lg px-4 pb-8">
+      <div className="mx-auto w-full min-w-0 max-w-lg px-4 pb-8">
         <p className="py-4 text-xl font-bold">{date}</p>
-        <p className="mb-4 text-muted">{sourceLabel}</p>
+        <p className="mb-4 text-muted-foreground">{sourceLabel}</p>
 
-        <div className="mb-4 flex gap-2">
-          {(['targets', 'plan', 'log'] as Tab[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={`flex-1 rounded-lg border px-2 py-2.5 text-sm font-semibold capitalize ${
-                tab === t
-                  ? 'border-primary-dark bg-primary-dark text-white'
-                  : 'border-border-light bg-surface text-muted'
-              }`}
-            >
-              {t === 'targets' ? 'Targets' : t === 'plan' ? 'Meal Plan' : 'Log'}
-            </button>
-          ))}
-        </div>
+        <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="mb-4 w-full">
+          <TabsList>
+            <TabsTrigger value="targets">Targets</TabsTrigger>
+            <TabsTrigger value="plan">Meal Plan</TabsTrigger>
+            <TabsTrigger value="log">Log</TabsTrigger>
+          </TabsList>
 
-        {message && (
-          <p className={`mb-4 text-sm ${messageIsError ? 'text-danger' : 'text-primary'}`}>
-            {message}
-          </p>
-        )}
+          {message && (
+            <p className={cn('my-4 text-sm', messageIsError ? 'text-destructive' : 'text-primary')}>
+              {message}
+            </p>
+          )}
 
-        {tab === 'targets' && (
-          <div>
+          <TabsContent value="targets" className="mt-4">
             {effective && effective.source !== 'none' && (
               <MacroProgress
                 label="Progress vs Target"
@@ -267,119 +259,128 @@ export function DayDetailPage() {
             )}
 
             <h2 className="mb-2 font-bold">Set target for this day</h2>
-            <p className="mb-3 text-sm text-muted">
+            <p className="mb-3 text-sm text-muted-foreground">
               Saving here creates a one-off override. Leave unchanged to keep using the weekly
               default. Calories should equal protein×4 + carbs×4 + fat×9.
             </p>
-            <MacroCaloriesInput
-              value={calories}
-              onChange={setCalories}
-              placeholder="Calories"
-              invalid={macroFieldsInvalid}
-              className="mb-2"
-            />
-            <MacroCaloriesInput
-              value={protein}
-              onChange={setProtein}
-              placeholder="Protein (g)"
-              invalid={macroFieldsInvalid}
-              className="mb-2"
-            />
-            <MacroCaloriesInput
-              value={fat}
-              onChange={setFat}
-              placeholder="Fat (g)"
-              invalid={macroFieldsInvalid}
-              className="mb-2"
-            />
-            <MacroCaloriesInput
-              value={carbs}
-              onChange={setCarbs}
-              placeholder="Carbs (g)"
-              invalid={macroFieldsInvalid}
-              className="mb-2"
-            />
-            <MacroCaloriesFeedback validation={macroValidation} className="mb-3" />
-            <button
-              type="button"
-              className="btn-primary mt-2 w-full"
-              onClick={saveOverride}
-              disabled={macroFieldsInvalid}
-            >
-              Save custom target
-            </button>
-            {effective?.source === 'override' && (
-              <button
+            <div className="space-y-2">
+              <MacroCaloriesInput
+                id="day-target-calories"
+                label="Calories"
+                value={calories}
+                onChange={setCalories}
+                placeholder="e.g. 2200"
+                invalid={macroFieldsInvalid}
+              />
+              <MacroCaloriesInput
+                id="day-target-protein"
+                label="Protein (g)"
+                value={protein}
+                onChange={setProtein}
+                placeholder="e.g. 180"
+                invalid={macroFieldsInvalid}
+              />
+              <MacroCaloriesInput
+                id="day-target-fat"
+                label="Fat (g)"
+                value={fat}
+                onChange={setFat}
+                placeholder="e.g. 70"
+                invalid={macroFieldsInvalid}
+              />
+              <MacroCaloriesInput
+                id="day-target-carbs"
+                label="Carbs (g)"
+                value={carbs}
+                onChange={setCarbs}
+                placeholder="e.g. 200"
+                invalid={macroFieldsInvalid}
+              />
+              <MacroCaloriesFeedback validation={macroValidation} className="mb-1" />
+              <Button
                 type="button"
-                className="btn-secondary mt-2 w-full"
-                onClick={resetToWeeklyDefault}
+                className="mt-2 w-full"
+                size="lg"
+                onClick={saveOverride}
+                disabled={macroFieldsInvalid}
               >
-                Use weekly default instead
-              </button>
-            )}
-          </div>
-        )}
+                Save custom target
+              </Button>
+              {effective?.source === 'override' && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  size="lg"
+                  onClick={resetToWeeklyDefault}
+                >
+                  Use weekly default instead
+                </Button>
+              )}
+            </div>
+          </TabsContent>
 
-        {tab === 'plan' && (
-          <div>
-            <p className="mb-3 text-sm text-muted">{planSourceLabel}</p>
+          <TabsContent value="plan" className="mt-4">
+            <p className="mb-3 text-sm text-muted-foreground">{planSourceLabel}</p>
             <TotalsSummary label="Planned totals" nutrients={planned} />
             {planMeals.map((meal) => (
-              <div key={meal.id} className="card mb-3">
-                <div className="mb-2 flex items-baseline justify-between gap-2">
-                  <h3 className="font-semibold">{meal.name}</h3>
+              <Card key={meal.id} className="mb-3">
+                <CardHeader className="flex-row items-baseline justify-between space-y-0 pb-2">
+                  <CardTitle className="text-base">{meal.name}</CardTitle>
                   {formatMealTime(meal.mealTime) && (
-                    <span className="text-sm text-muted">{formatMealTime(meal.mealTime)}</span>
+                    <span className="text-sm text-muted-foreground">{formatMealTime(meal.mealTime)}</span>
                   )}
-                </div>
-                {meal.entries.length === 0 ? (
-                  <p className="text-sm italic text-muted">No foods planned</p>
-                ) : (
-                  meal.entries.map((entry) => {
-                    const food = foodsMap.get(entry.foodId);
-                    return (
-                      <div key={entry.id} className="border-t border-border-light py-2 first:border-0">
-                        <p className="font-medium">{food?.name ?? 'Unknown'}</p>
-                        <p className="text-sm text-muted">
-                          {entry.quantity}
-                          {entry.unit}
-                          {meal.source === 'weekly' && (
-                            <span className="ml-2 text-xs text-primary">(template)</span>
-                          )}
-                        </p>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+                </CardHeader>
+                <CardContent>
+                  {meal.entries.length === 0 ? (
+                    <p className="text-sm italic text-muted-foreground">No foods planned</p>
+                  ) : (
+                    meal.entries.map((entry) => {
+                      const food = foodsMap.get(entry.foodId);
+                      return (
+                        <div key={entry.id} className="border-t border-border py-2 first:border-0 first:pt-0">
+                          <p className="font-medium">{food?.name ?? 'Unknown'}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {entry.quantity}
+                            {entry.unit}
+                            {meal.source === 'weekly' && (
+                              <span className="ml-2 text-xs text-primary">(template)</span>
+                            )}
+                          </p>
+                        </div>
+                      );
+                    })
+                  )}
+                </CardContent>
+              </Card>
             ))}
             {planMeals.length === 0 && (
-              <p className="italic text-muted">
+              <p className="italic text-muted-foreground">
                 No meal plan for this day. Set up weekly templates in Settings.
               </p>
             )}
             {planSource === 'weekly' && planMeals.length > 0 && (
-              <button type="button" className="btn-primary mt-3 w-full" onClick={customizeDayPlan}>
+              <Button type="button" className="mt-3 w-full" size="lg" onClick={customizeDayPlan}>
                 Customize this day&apos;s plan
-              </button>
+              </Button>
             )}
             {planSource === 'override' && (
-              <button
+              <Button
                 type="button"
-                className="btn-secondary mt-3 w-full"
+                variant="outline"
+                className="mt-3 w-full"
+                size="lg"
                 onClick={resetPlanToWeekly}
               >
                 Use weekly template instead
-              </button>
+              </Button>
             )}
-            <Link to="/weekly-meal-plans" className="link mt-3 block text-center text-sm">
-              Edit weekly templates
-            </Link>
-          </div>
-        )}
+            <Button variant="link" className="mt-3 w-full" asChild>
+              <Link to="/weekly-meal-plans">Edit weekly templates</Link>
+            </Button>
+          </TabsContent>
 
-        {tab === 'log' && (
-          <div>
+          <TabsContent value="log" className="mt-4">
             <TotalsSummary label="Logged totals" nutrients={consumed} />
             <DailyFoodLog
               date={date}
@@ -393,8 +394,8 @@ export function DayDetailPage() {
                 await queryClient.invalidateQueries({ queryKey: ['weekly-meals'] });
               }}
             />
-          </div>
-        )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

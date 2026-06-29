@@ -1,5 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MacroProgress } from '../components/MacroProgress';
 import { confirmedFoodLogs } from '@calorie-tracker/shared';
 import { DailyFoodLog, ensureWeeklyMealsForDate } from '../components/DailyFoodLog';
@@ -65,12 +67,12 @@ export function TodayPage() {
   };
 
   return (
-    <div className="mx-auto max-w-lg pb-4">
-      <div className="flex items-center justify-between px-4 py-4">
-        <p className="text-sm text-muted">{today}</p>
-        <button type="button" onClick={onRefresh} className="link text-sm">
+    <div className="mx-auto w-full min-w-0 max-w-lg px-4 pb-4">
+      <div className="flex items-center justify-between py-4">
+        <p className="text-sm text-muted-foreground">{today}</p>
+        <Button variant="link" className="h-auto p-0 text-sm" onClick={onRefresh}>
           Refresh
-        </button>
+        </Button>
       </div>
 
       {hasTarget ? (
@@ -85,20 +87,24 @@ export function TodayPage() {
           }}
         />
       ) : (
-        <div className="card mx-4">
-          <h2 className="mb-2 font-semibold">No macro target set</h2>
-          <Link to="/weekly-targets" className="link block">
-            Set weekly defaults
-          </Link>
-          <Link to={`/day/${today}`} className="link mt-2 block">
-            Set target for today
-          </Link>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>No macro target set</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Button variant="link" className="h-auto p-0" asChild>
+              <Link to="/weekly-targets">Set weekly defaults</Link>
+            </Button>
+            <Button variant="link" className="h-auto p-0" asChild>
+              <Link to={`/day/${today}`}>Set target for today</Link>
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
-      <section className="mx-4 mt-4">
+      <section className="mt-4">
         <h2 className="mb-1 text-lg font-bold">Today&apos;s meals</h2>
-        <p className="mb-3 text-sm text-muted">
+        <p className="mb-3 text-sm text-muted-foreground">
           Pre-filled from your meal plan. Confirm each food when you eat it — edit amounts or remove
           anything that changed today.
         </p>
@@ -112,9 +118,9 @@ export function TodayPage() {
         />
       </section>
 
-      <Link to={`/day/${today}`} className="btn-secondary mx-4 mt-4 block text-center">
-        View full day details
-      </Link>
+      <Button variant="outline" className="mt-4 w-full" size="lg" asChild>
+        <Link to={`/day/${today}`}>View full day details</Link>
+      </Button>
     </div>
   );
 }

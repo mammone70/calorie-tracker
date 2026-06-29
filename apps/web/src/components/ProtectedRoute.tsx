@@ -7,7 +7,7 @@ export function ProtectedRoute() {
   if (isLoading) {
     return (
       <div className="flex min-h-dvh items-center justify-center">
-        <div className="text-muted">Loading…</div>
+        <div className="text-muted-foreground">Loading…</div>
       </div>
     );
   }
@@ -25,7 +25,7 @@ export function GuestRoute() {
   if (isLoading) {
     return (
       <div className="flex min-h-dvh items-center justify-center">
-        <div className="text-muted">Loading…</div>
+        <div className="text-muted-foreground">Loading…</div>
       </div>
     );
   }

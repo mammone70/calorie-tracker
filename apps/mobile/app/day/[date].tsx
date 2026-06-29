@@ -19,7 +19,7 @@ import type {
   MealPlanEntry,
   Nutrients,
 } from '@calorie-tracker/shared';
-import { WEEKDAYS } from '@calorie-tracker/shared';
+import { WEEKDAYS, formatNutrientsSummary } from '@calorie-tracker/shared';
 import { MacroProgress } from '../../components/MacroProgress';
 import { AppTextInput } from '../../components/AppTextInput';
 import { colors } from '../../lib/theme';
@@ -283,9 +283,7 @@ function TotalsSummary({ label, nutrients }: { label: string; nutrients: Nutrien
   return (
     <View style={styles.totals}>
       <Text style={styles.totalsLabel}>{label}</Text>
-      <Text style={styles.totalsValues}>
-        {nutrients.calories} cal · P {nutrients.protein}g · F {nutrients.fat}g · C {nutrients.carbs}g
-      </Text>
+      <Text style={styles.totalsValues}>{formatNutrientsSummary(nutrients)}</Text>
     </View>
   );
 }

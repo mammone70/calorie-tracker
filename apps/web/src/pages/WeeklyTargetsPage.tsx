@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MacroCaloriesFeedback, MacroCaloriesInput } from '../components/MacroCaloriesFeedback';
 import { PageHeader } from '../components/PageHeader';
 import {
@@ -7,7 +9,8 @@ import {
   macroFormHasValues,
 } from '../hooks/useMacroCaloriesValidation';
 import { api, localStore } from '../lib/client';
-import { WEEKDAYS, macroCaloriesError, type WeeklyMacroTarget, type WeekdayIndex } from '@calorie-tracker/shared';
+import { cn } from '@/lib/utils';
+import { WEEKDAYS, macroCaloriesError, roundMacroValue, type WeeklyMacroTarget, type WeekdayIndex } from '@calorie-tracker/shared';
 
 type DayForm = {
   calories: string;
@@ -42,10 +45,10 @@ export function WeeklyTargetsPage() {
         const row = weeklyQuery.data.find((target) => target.dayOfWeek === index);
         if (!row) return emptyDayForm();
         return {
-          calories: String(row.calories),
-          protein: String(row.proteinG),
-          fat: String(row.fatG),
-          carbs: String(row.carbsG),
+          calories: String(roundMacroValue(row.calories)),
+          protein: String(roundMacroValue(row.proteinG)),
+          fat: String(roundMacroValue(row.fatG)),
+          carbs: String(roundMacroValue(row.carbsG)),
         };
       }),
     );
@@ -116,7 +119,7 @@ export function WeeklyTargetsPage() {
     return (
       <div>
         <PageHeader title="Weekly Targets" backTo="/settings" />
-        <div className="flex justify-center py-16 text-muted">Loading…</div>
+        <div className="flex justify-center py-16 text-muted-foreground">Loading…</div>
       </div>
     );
   }
@@ -124,14 +127,14 @@ export function WeeklyTargetsPage() {
   return (
     <div>
       <PageHeader title="Weekly Targets" backTo="/settings" />
-      <div className="mx-auto max-w-lg px-4 pb-8">
-        <p className="my-4 text-sm text-muted">
+      <div className="mx-auto w-full min-w-0 max-w-lg px-4 pb-8">
+        <p className="my-4 text-sm text-muted-foreground">
           Set default macro targets for each day of the week. Individual dates can still be
           customized from the calendar. Calories should equal protein×4 + carbs×4 + fat×9.
         </p>
 
         {message && (
-          <p className={`mb-4 text-sm ${messageIsError ? 'text-danger' : 'text-primary'}`}>
+          <p className={cn('mb-4 text-sm', messageIsError ? 'text-destructive' : 'text-primary')}>
             {message}
           </p>
         )}
@@ -142,51 +145,56 @@ export function WeeklyTargetsPage() {
           const invalid = validation.show && !validation.isValid;
 
           return (
-          <div key={dayName} className="card mb-2.5 border border-border-light">
-            <h2 className="mb-2 font-bold">{dayName}</h2>
-            <div className="grid grid-cols-4 gap-2">
-              <MacroCaloriesInput
-                className="px-2 py-2 text-sm"
-                placeholder="Cal"
-                value={form.calories}
-                onChange={(value) => updateDay(index, 'calories', value)}
-                invalid={invalid}
-              />
-              <MacroCaloriesInput
-                className="px-2 py-2 text-sm"
-                placeholder="Protein"
-                value={form.protein}
-                onChange={(value) => updateDay(index, 'protein', value)}
-                invalid={invalid}
-              />
-              <MacroCaloriesInput
-                className="px-2 py-2 text-sm"
-                placeholder="Fat"
-                value={form.fat}
-                onChange={(value) => updateDay(index, 'fat', value)}
-                invalid={invalid}
-              />
-              <MacroCaloriesInput
-                className="px-2 py-2 text-sm"
-                placeholder="Carbs"
-                value={form.carbs}
-                onChange={(value) => updateDay(index, 'carbs', value)}
-                invalid={invalid}
-              />
-            </div>
-            <MacroCaloriesFeedback validation={validation} className="mt-2" />
-          </div>
+            <Card key={dayName} className="mb-2.5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">{dayName}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-4 gap-2">
+                  <MacroCaloriesInput
+                    className="px-2 text-sm"
+                    placeholder="Cal"
+                    value={form.calories}
+                    onChange={(value) => updateDay(index, 'calories', value)}
+                    invalid={invalid}
+                  />
+                  <MacroCaloriesInput
+                    className="px-2 text-sm"
+                    placeholder="Protein"
+                    value={form.protein}
+                    onChange={(value) => updateDay(index, 'protein', value)}
+                    invalid={invalid}
+                  />
+                  <MacroCaloriesInput
+                    className="px-2 text-sm"
+                    placeholder="Fat"
+                    value={form.fat}
+                    onChange={(value) => updateDay(index, 'fat', value)}
+                    invalid={invalid}
+                  />
+                  <MacroCaloriesInput
+                    className="px-2 text-sm"
+                    placeholder="Carbs"
+                    value={form.carbs}
+                    onChange={(value) => updateDay(index, 'carbs', value)}
+                    invalid={invalid}
+                  />
+                </div>
+                <MacroCaloriesFeedback validation={validation} className="mt-2" />
+              </CardContent>
+            </Card>
           );
         })}
 
-        <button
+        <Button
           type="button"
-          className="btn-primary mt-2 w-full"
+          className="mt-2 w-full"
+          size="lg"
           onClick={saveAll}
           disabled={saving || hasInvalidDay}
         >
           {saving ? 'Saving…' : 'Save weekly defaults'}
-        </button>
+        </Button>
       </div>
     </div>
   );

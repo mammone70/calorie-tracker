@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { App } from './App';
 import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { localStoragePersister, queryClient } from './lib/query-client';
 import './index.css';
 
@@ -12,9 +13,11 @@ createRoot(document.getElementById('root')!).render(
       client={queryClient}
       persistOptions={{ persister: localStoragePersister }}
     >
-      <AuthProvider>
-        <App />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </ThemeProvider>
     </PersistQueryClientProvider>
   </StrictMode>,
 );

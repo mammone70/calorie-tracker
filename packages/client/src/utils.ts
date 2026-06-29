@@ -13,16 +13,16 @@ export function computeNutrients(
   const factor = quantityGrams / 100;
   return {
     calories: Math.round(nutrientsPer100g.calories * factor),
-    protein: Math.round(nutrientsPer100g.protein * factor * 10) / 10,
-    fat: Math.round(nutrientsPer100g.fat * factor * 10) / 10,
-    carbs: Math.round(nutrientsPer100g.carbs * factor * 10) / 10,
+    protein: Math.round(nutrientsPer100g.protein * factor),
+    fat: Math.round(nutrientsPer100g.fat * factor),
+    carbs: Math.round(nutrientsPer100g.carbs * factor),
   };
 }
 
 export function sumNutrients(
   items: Array<{ calories: number; protein: number; fat: number; carbs: number }>,
 ) {
-  return items.reduce(
+  const totals = items.reduce(
     (acc, item) => ({
       calories: acc.calories + item.calories,
       protein: acc.protein + item.protein,
@@ -31,4 +31,10 @@ export function sumNutrients(
     }),
     { calories: 0, protein: 0, fat: 0, carbs: 0 },
   );
+  return {
+    calories: Math.round(totals.calories),
+    protein: Math.round(totals.protein),
+    fat: Math.round(totals.fat),
+    carbs: Math.round(totals.carbs),
+  };
 }

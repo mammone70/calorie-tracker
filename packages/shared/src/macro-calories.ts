@@ -36,3 +36,21 @@ export function macroCaloriesError(
   const expected = caloriesFromMacros(proteinG, fatG, carbsG);
   return `${MACRO_CALORIES_MISMATCH_MESSAGE}. Based on your macros, calories should be ${expected}.`;
 }
+
+/** Round macro/nutrient values for display (storage may keep decimals). */
+export function roundMacroValue(value: number): number {
+  return Math.round(value);
+}
+
+export function formatMacroValue(value: number): string {
+  return String(roundMacroValue(value));
+}
+
+export function formatNutrientsSummary(nutrients: {
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+}): string {
+  return `${formatMacroValue(nutrients.calories)} cal · P ${formatMacroValue(nutrients.protein)}g · F ${formatMacroValue(nutrients.fat)}g · C ${formatMacroValue(nutrients.carbs)}g`;
+}

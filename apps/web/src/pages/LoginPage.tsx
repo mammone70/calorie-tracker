@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '../contexts/AuthContext';
 
 export function LoginPage() {
@@ -31,34 +33,32 @@ export function LoginPage() {
   return (
     <div className="flex min-h-dvh flex-col justify-center px-6 pt-safe-top pb-safe">
       <h1 className="mb-2 text-3xl font-bold">Calorie Tracker</h1>
-      <p className="mb-8 text-muted">Sign in to sync your data</p>
+      <p className="mb-8 text-muted-foreground">Sign in to sync your data</p>
 
-      <form onSubmit={handleLogin} className="space-y-2">
-        <input
-          className="input-field"
+      <form onSubmit={handleLogin} className="space-y-3">
+        <Input
           placeholder="Email"
           type="email"
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
-        <input
-          className="input-field"
+        <Input
           placeholder="Password"
           type="password"
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        {error && <p className="text-sm text-danger">{error}</p>}
-        <button type="submit" className="btn-primary mt-2 w-full" disabled={loading}>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <Button type="submit" className="mt-2 w-full" size="lg" disabled={loading}>
           {loading ? 'Signing in…' : 'Sign In'}
-        </button>
+        </Button>
       </form>
 
-      <Link to="/register" className="link mt-6 block text-center">
-        Create an account
-      </Link>
+      <Button variant="link" className="mt-6 w-full" asChild>
+        <Link to="/register">Create an account</Link>
+      </Button>
     </div>
   );
 }

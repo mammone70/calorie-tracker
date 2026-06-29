@@ -1,3 +1,6 @@
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import '@fontsource-variable/inter';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -6,7 +9,7 @@
   html,
   body,
   #root {
-    @apply min-h-dvh bg-background text-foreground antialiased;
+    @apply min-h-dvh w-full overflow-x-hidden bg-background text-foreground antialiased;
   }
 
   input,
@@ -15,26 +18,246 @@
   button {
     @apply text-base;
   }
-}
 
-@layer components {
-  .card {
-    @apply rounded-xl bg-surface p-4;
+  .theme {
+    --font-heading: var(--font-sans);
+    --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
+    --tracking-tight: calc(var(--tracking-normal) - 0.025em);
+    --tracking-wide: calc(var(--tracking-normal) + 0.025em);
+    --tracking-wider: calc(var(--tracking-normal) + 0.05em);
+    --tracking-widest: calc(var(--tracking-normal) + 0.1em);
   }
 
-  .btn-primary {
-    @apply rounded-lg bg-primary-dark px-4 py-3.5 font-semibold text-white transition hover:bg-primary disabled:opacity-60;
+  :root {
+    --background: rgb(250, 250, 250);
+    --foreground: rgb(9, 9, 11);
+    --card: rgb(255, 255, 255);
+    --card-foreground: rgb(9, 9, 11);
+    --popover: rgb(255, 255, 255);
+    --popover-foreground: rgb(24, 24, 27);
+    --primary: rgb(2, 85, 163);
+    --primary-foreground: rgb(255, 255, 255);
+    --secondary: rgb(212, 212, 216);
+    --secondary-foreground: rgb(9, 9, 11);
+    --muted: rgb(229, 231, 235);
+    --muted-foreground: rgb(9, 9, 11);
+    --accent: rgb(228, 228, 231);
+    --accent-foreground: rgb(9, 9, 11);
+    --destructive: rgb(231, 0, 11);
+    --destructive-foreground: rgb(255, 255, 255);
+    --border: rgb(212, 212, 216);
+    --input: rgb(228, 228, 231);
+    --ring: rgb(2, 85, 163);
+    --chart-1: rgb(208, 250, 229);
+    --chart-2: rgb(94, 233, 181);
+    --chart-3: rgb(0, 188, 125);
+    --chart-4: rgb(0, 122, 85);
+    --chart-5: rgb(0, 79, 59);
+    --sidebar: rgb(244, 244, 245);
+    --sidebar-foreground: rgb(9, 9, 11);
+    --sidebar-primary: rgb(2, 85, 163);
+    --sidebar-primary-foreground: rgb(255, 255, 255);
+    --sidebar-accent: rgb(250, 250, 250);
+    --sidebar-accent-foreground: rgb(9, 9, 11);
+    --sidebar-border: rgb(212, 212, 216);
+    --sidebar-ring: rgb(2, 85, 163);
+    --font-sans: Inter, ui-sans-serif, sans-serif, system-ui;
+    --font-serif: Merriweather, ui-serif, serif;
+    --font-mono: JetBrains Mono, ui-monospace, monospace;
+    --radius: 0.125rem;
+    --shadow-x: 3px;
+    --shadow-y: 3px;
+    --shadow-blur: 6px;
+    --shadow-spread: -2px;
+    --shadow-opacity: 0.15;
+    --shadow-color: oklch(0 0 0);
+    --shadow-2xs: 3px 3px 6px -2px hsl(0 0% 0% / 0.07);
+    --shadow-xs: 3px 3px 6px -2px hsl(0 0% 0% / 0.07);
+    --shadow-sm: 3px 3px 6px -2px hsl(0 0% 0% / 0.15), 3px 1px 2px -3px hsl(0 0% 0% / 0.15);
+    --shadow: 3px 3px 6px -2px hsl(0 0% 0% / 0.15), 3px 1px 2px -3px hsl(0 0% 0% / 0.15);
+    --shadow-md: 3px 3px 6px -2px hsl(0 0% 0% / 0.15), 3px 2px 4px -3px hsl(0 0% 0% / 0.15);
+    --shadow-lg: 3px 3px 6px -2px hsl(0 0% 0% / 0.15), 3px 4px 6px -3px hsl(0 0% 0% / 0.15);
+    --shadow-xl: 3px 3px 6px -2px hsl(0 0% 0% / 0.15), 3px 8px 10px -3px hsl(0 0% 0% / 0.15);
+    --shadow-2xl: 3px 3px 6px -2px hsl(0 0% 0% / 0.38);
+    --tracking-normal: 0.025em;
+    --spacing: 0.22rem;
   }
 
-  .btn-secondary {
-    @apply rounded-lg border border-border-light bg-surface px-4 py-3.5 font-semibold text-primary transition hover:bg-surface-alt;
+  .dark {
+    --background: rgb(22, 22, 22);
+    --foreground: rgb(255, 255, 255);
+    --card: rgb(30, 30, 30);
+    --card-foreground: rgb(255, 255, 255);
+    --popover: rgb(30, 30, 30);
+    --popover-foreground: rgb(255, 255, 255);
+    --primary: rgb(3, 87, 165);
+    --primary-foreground: rgb(255, 255, 255);
+    --secondary: rgb(3, 87, 165);
+    --secondary-foreground: rgb(255, 255, 255);
+    --muted: rgb(30, 30, 30);
+    --muted-foreground: rgb(255, 255, 255);
+    --accent: rgb(64, 64, 64);
+    --accent-foreground: rgb(255, 255, 255);
+    --destructive: rgb(255, 0, 0);
+    --destructive-foreground: rgb(250, 250, 250);
+    --border: rgb(41, 41, 41);
+    --input: rgb(22, 22, 22);
+    --ring: rgb(3, 87, 165);
+    --chart-1: rgb(208, 250, 229);
+    --chart-2: rgb(94, 233, 181);
+    --chart-3: rgb(0, 188, 125);
+    --chart-4: rgb(0, 122, 85);
+    --chart-5: rgb(0, 79, 59);
+    --sidebar: rgb(30, 30, 30);
+    --sidebar-foreground: rgb(255, 255, 255);
+    --sidebar-primary: rgb(3, 87, 165);
+    --sidebar-primary-foreground: rgb(255, 255, 255);
+    --sidebar-accent: rgb(22, 22, 22);
+    --sidebar-accent-foreground: rgb(255, 255, 255);
+    --sidebar-border: rgb(38, 38, 38);
+    --sidebar-ring: rgb(3, 87, 165);
+    --font-sans: Inter, ui-sans-serif, sans-serif, system-ui;
+    --font-serif: Merriweather, ui-serif, serif;
+    --font-mono: JetBrains Mono, ui-monospace, monospace;
+    --radius: 0.125rem;
+    --shadow-x: 3px;
+    --shadow-y: 3px;
+    --shadow-blur: 6px;
+    --shadow-spread: -2px;
+    --shadow-opacity: 0.15;
+    --shadow-color: oklch(0 0 0);
+    --shadow-2xs: 3px 3px 6px -2px hsl(0 0% 0% / 0.07);
+    --shadow-xs: 3px 3px 6px -2px hsl(0 0% 0% / 0.07);
+    --shadow-sm: 3px 3px 6px -2px hsl(0 0% 0% / 0.15), 3px 1px 2px -3px hsl(0 0% 0% / 0.15);
+    --shadow: 3px 3px 6px -2px hsl(0 0% 0% / 0.15), 3px 1px 2px -3px hsl(0 0% 0% / 0.15);
+    --shadow-md: 3px 3px 6px -2px hsl(0 0% 0% / 0.15), 3px 2px 4px -3px hsl(0 0% 0% / 0.15);
+    --shadow-lg: 3px 3px 6px -2px hsl(0 0% 0% / 0.15), 3px 4px 6px -3px hsl(0 0% 0% / 0.15);
+    --shadow-xl: 3px 3px 6px -2px hsl(0 0% 0% / 0.15), 3px 8px 10px -3px hsl(0 0% 0% / 0.15);
+    --shadow-2xl: 3px 3px 6px -2px hsl(0 0% 0% / 0.38);
   }
 
-  .input-field {
-    @apply mb-2 w-full rounded-lg border border-border bg-surface px-4 py-3 text-foreground placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary;
+  .theme-pink-galore {
+    --background: oklch(0.9821 0 0);
+    --foreground: oklch(0.2435 0 0);
+    --card: oklch(0.9911 0 0);
+    --card-foreground: oklch(0.2435 0 0);
+    --popover: oklch(0.9911 0 0);
+    --popover-foreground: oklch(0.2435 0 0);
+    --primary: oklch(0.4347 0.0547 42.0662);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.92 0.0651 74.3695);
+    --secondary-foreground: oklch(0.3591 0.0934 40.2077);
+    --muted: oklch(0.9521 0 0);
+    --muted-foreground: oklch(0.5032 0 0);
+    --accent: oklch(0.931 0 0);
+    --accent-foreground: oklch(0.2435 0 0);
+    --destructive: oklch(0.6533 0.2343 32.6348);
+    --destructive-foreground: oklch(1 0 0);
+    --border: oklch(0.8822 0 0);
+    --input: oklch(0.8822 0 0);
+    --ring: oklch(0.4347 0.0547 42.0662);
+    --chart-1: oklch(0.4347 0.0547 42.0662);
+    --chart-2: oklch(0.92 0.0651 74.3695);
+    --chart-3: oklch(0.931 0 0);
+    --chart-4: oklch(0.9367 0.0523 75.5009);
+    --chart-5: oklch(0.4339 0.0619 40.8399);
+    --sidebar: oklch(0.9881 0 0);
+    --sidebar-foreground: oklch(0.2645 0 0);
+    --sidebar-primary: oklch(0.325 0 0);
+    --sidebar-primary-foreground: oklch(0.9881 0 0);
+    --sidebar-accent: oklch(0.9761 0 0);
+    --sidebar-accent-foreground: oklch(0.325 0 0);
+    --sidebar-border: oklch(0.9401 0 0);
+    --sidebar-ring: oklch(0.7731 0 0);
+    --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+      'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+    --font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+      'Courier New', monospace;
+    --radius: 0.5rem;
+    --shadow-color: oklch(0 0 0);
+    --shadow-opacity: 0.1;
+    --shadow-blur: 3px;
+    --shadow-spread: 0px;
+    --shadow-x: 0;
+    --shadow-y: 1px;
+    --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+    --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
+    --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
+    --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.1);
+    --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 4px 6px -1px hsl(0 0% 0% / 0.1);
+    --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
+    --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+    --tracking-normal: 0em;
+    --spacing: 0.25rem;
   }
 
-  .link {
-    @apply font-semibold text-primary hover:underline;
+  .theme-pink-galore.dark {
+    --background: oklch(0.1822 0 0);
+    --foreground: oklch(0.9461 0 0);
+    --card: oklch(0.2178 0 0);
+    --card-foreground: oklch(0.9491 0 0);
+    --popover: oklch(0.2178 0 0);
+    --popover-foreground: oklch(0.9491 0 0);
+    --primary: oklch(0.8546 0.117 334.7771);
+    --primary-foreground: oklch(0.2174 0.0841 327.9991);
+    --secondary: oklch(0.3004 0.0454 334.8301);
+    --secondary-foreground: oklch(0.8867 0.1041 325.8814);
+    --muted: oklch(0.2478 0 0);
+    --muted-foreground: oklch(0.7731 0 0);
+    --accent: oklch(0.2809 0 0);
+    --accent-foreground: oklch(0.9461 0 0);
+    --destructive: oklch(0.6533 0.2343 32.6348);
+    --destructive-foreground: oklch(1 0 0);
+    --border: oklch(0.2205 0.0278 329.3012);
+    --input: oklch(0.3979 0 0);
+    --ring: oklch(0.8839 0.0945 332.7264);
+    --chart-1: oklch(0.8839 0.0945 332.7264);
+    --chart-2: oklch(0.3008 0.0465 333.0645);
+    --chart-3: oklch(0.2809 0 0);
+    --chart-4: oklch(0.3289 0.055 333.4142);
+    --chart-5: oklch(0.8849 0.0972 330.8802);
+    --sidebar: oklch(0.2069 0.0098 285.5081);
+    --sidebar-foreground: oklch(0.9682 0.0017 325.5904);
+    --sidebar-primary: oklch(0.6325 0.259 355.947);
+    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-accent: oklch(0.2761 0.0116 325.8858);
+    --sidebar-accent-foreground: oklch(0.9682 0.0017 325.5904);
+    --sidebar-border: oklch(0.2761 0.0116 325.8858);
+    --sidebar-ring: oklch(0.8731 0.0094 330.9666);
+    --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+      'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+    --font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+      'Courier New', monospace;
+    --radius: 0.5rem;
+    --shadow-color: oklch(0 0 0);
+    --shadow-opacity: 0.1;
+    --shadow-blur: 3px;
+    --shadow-spread: 0px;
+    --shadow-x: 0;
+    --shadow-y: 1px;
+    --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+    --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
+    --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
+    --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.1);
+    --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 4px 6px -1px hsl(0 0% 0% / 0.1);
+    --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
+    --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    letter-spacing: var(--tracking-normal);
+  }
+
+  html {
+    @apply font-sans;
   }
 }

@@ -10,6 +10,7 @@ import {
 import { router } from 'expo-router';
 import { api } from '../../lib/api';
 import type { Food } from '@calorie-tracker/shared';
+import { formatNutrientsSummary } from '@calorie-tracker/shared';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors } from '../../lib/theme';
 
@@ -51,8 +52,7 @@ export default function FoodsScreen() {
             <Text style={styles.name}>{item.name}</Text>
             {item.brand ? <Text style={styles.brand}>{item.brand}</Text> : null}
             <Text style={styles.macros}>
-              {item.nutrientsPer100g.calories} cal · P {item.nutrientsPer100g.protein}g · F{' '}
-              {item.nutrientsPer100g.fat}g · C {item.nutrientsPer100g.carbs}g (per 100g)
+              {formatNutrientsSummary(item.nutrientsPer100g)} (per 100g)
             </Text>
             <Text style={styles.source}>{item.source}</Text>
           </View>

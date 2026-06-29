@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 import { PageHeader } from '../components/PageHeader';
 import { DailyFoodLog, ensureWeeklyMealsForDate } from '../components/DailyFoodLog';
 import { api } from '../lib/client';
@@ -38,8 +39,8 @@ export function LogFoodPage() {
   return (
     <div>
       <PageHeader title="Log Food" backTo="/" />
-      <div className="mx-auto max-w-lg px-4 pb-8">
-        <p className="my-4 text-sm text-muted">Logging for {date}</p>
+      <div className="mx-auto w-full min-w-0 max-w-lg px-4 pb-8">
+        <p className="my-4 text-sm text-muted-foreground">Logging for {date}</p>
 
         {preselectedFoodId && foodsMap.get(preselectedFoodId) && (
           <p className="mb-4 text-sm">
@@ -56,9 +57,9 @@ export function LogFoodPage() {
           onMealsNeeded={setupMeals}
         />
 
-        <Link to={`/day/${date}`} className="link mt-4 block text-center text-sm">
-          View full day details
-        </Link>
+        <Button variant="link" className="mt-4 w-full" asChild>
+          <Link to={`/day/${date}`}>View full day details</Link>
+        </Button>
       </div>
     </div>
   );

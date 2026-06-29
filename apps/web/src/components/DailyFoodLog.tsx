@@ -14,6 +14,11 @@ import {
   type FoodLogEntry,
   type WeekdayIndex,
 } from '@calorie-tracker/shared';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { cn, selectClass } from '@/lib/utils';
 import { api, localStore } from '../lib/client';
 
 type DailyFoodLogProps = {
@@ -39,6 +44,7 @@ export function DailyFoodLog({
 }: DailyFoodLogProps) {
   const queryClient = useQueryClient();
   const materializedRef = useRef(false);
+  const addFoodFormRef = useRef<HTMLDivElement>(null);
   const [activeMealId, setActiveMealId] = useState('');
   const [foodId, setFoodId] = useState(preselectedFoodId ?? '');
   const [quantity, setQuantity] = useState('100');
@@ -158,6 +164,13 @@ export function DailyFoodLog({
     });
   };
 
+  const selectMealForAdd = (mealId: string) => {
+    setActiveMealId(mealId);
+    requestAnimationFrame(() => {
+      addFoodFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  };
+
   const addFood = async () => {
     const meal = meals.find((item) => item.id === activeMealId);
     if (!meal || !foodId) {
@@ -206,163 +219,169 @@ export function DailyFoodLog({
 
   if (meals.length === 0) {
     return (
-      <div className="card">
-        <p className="mb-3 text-sm text-muted">
-          Set up your meal schedule before logging food. Each day uses your weekly template unless
-          customized.
-        </p>
-        <button
-          type="button"
-          className="btn-primary mb-2 w-full"
-          onClick={() => void onMealsNeeded?.()}
-        >
-          Set up {DEFAULT_MEAL_COUNT} default meals
-        </button>
-        <Link to="/weekly-meal-plans" className="link block text-center text-sm">
-          Edit weekly meal schedule
-        </Link>
-      </div>
+      <Card>
+        <CardContent className="space-y-3 pt-4">
+          <p className="text-sm text-muted-foreground">
+            Set up your meal schedule before logging food. Each day uses your weekly template unless
+            customized.
+          </p>
+          <Button className="w-full" size="lg" onClick={() => void onMealsNeeded?.()}>
+            Set up {DEFAULT_MEAL_COUNT} default meals
+          </Button>
+          <Button variant="link" className="w-full" asChild>
+            <Link to="/weekly-meal-plans">Edit weekly meal schedule</Link>
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
     <div>
       {message && (
-        <p className={`mb-3 text-sm ${messageIsError ? 'text-danger' : 'text-primary'}`}>
+        <p className={cn('mb-3 text-sm', messageIsError ? 'text-destructive' : 'text-primary')}>
           {message}
         </p>
       )}
 
       {pendingCount > 0 && (
-        <button
-          type="button"
-          className="btn-primary mb-4 w-full"
-          onClick={() => void confirmAll()}
-          disabled={saving}
-        >
+        <Button className="mb-4 w-full" size="lg" onClick={() => void confirmAll()} disabled={saving}>
           Confirm all ({pendingCount})
-        </button>
+        </Button>
       )}
 
       <div className="space-y-4">
         {grouped.map((meal) => (
-          <section key={meal.id} className="card">
-            <div className="mb-2 flex items-baseline justify-between gap-2">
-              <h3 className="font-semibold">{meal.name}</h3>
+          <Card key={meal.id}>
+            <CardHeader className="flex-row items-baseline justify-between space-y-0 pb-2">
+              <CardTitle className="text-base">{meal.name}</CardTitle>
               {formatMealTime(meal.mealTime) && (
-                <span className="text-sm text-muted">{formatMealTime(meal.mealTime)}</span>
+                <span className="text-sm text-muted-foreground">{formatMealTime(meal.mealTime)}</span>
               )}
-            </div>
-            {meal.logs.length === 0 ? (
-              <p className="text-sm italic text-muted">Nothing planned for this meal</p>
-            ) : (
-              <ul className="space-y-2">
-                {meal.logs.map((log) => {
-                  const food = foodsMap.get(log.foodId);
-                  const isPending = log.status === 'pending';
-                  return (
-                    <li
-                      key={log.id}
-                      className={`rounded-lg px-3 py-2 ${
-                        isPending ? 'border border-primary/30 bg-primary/5' : 'bg-surface'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium">{food?.name ?? 'Unknown food'}</p>
-                          {isPending && (
-                            <p className="text-xs text-primary">From meal plan — confirm when eaten</p>
-                          )}
-                          <div className="mt-2 flex items-center gap-2">
-                            <input
-                              className="input-field mb-0 w-24 py-1 text-sm"
-                              inputMode="decimal"
-                              value={draftQuantities[log.id] ?? String(log.quantity)}
-                              onChange={(e) =>
-                                setDraftQuantities((prev) => ({
-                                  ...prev,
-                                  [log.id]: e.target.value,
-                                }))
-                              }
-                              onBlur={() => void updateQuantity(log)}
-                            />
-                            <span className="text-sm text-muted">{log.unit}</span>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {meal.logs.length === 0 ? (
+                <p className="text-sm italic text-muted-foreground">Nothing planned for this meal</p>
+              ) : (
+                <ul className="space-y-2">
+                  {meal.logs.map((log) => {
+                    const food = foodsMap.get(log.foodId);
+                    const isPending = log.status === 'pending';
+                    return (
+                      <li
+                        key={log.id}
+                        className={cn(
+                          'rounded-lg px-3 py-2',
+                          isPending ? 'border border-primary/30 bg-primary/5' : 'bg-muted/50',
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{food?.name ?? 'Unknown food'}</p>
+                              {isPending && <Badge variant="secondary">Planned</Badge>}
+                            </div>
+                            {isPending && (
+                              <p className="text-xs text-primary">Confirm when eaten</p>
+                            )}
+                            <div className="mt-2 flex items-center gap-2">
+                              <Input
+                                className="mb-0 w-24"
+                                inputMode="decimal"
+                                value={draftQuantities[log.id] ?? String(log.quantity)}
+                                onChange={(e) =>
+                                  setDraftQuantities((prev) => ({
+                                    ...prev,
+                                    [log.id]: e.target.value,
+                                  }))
+                                }
+                                onBlur={() => void updateQuantity(log)}
+                              />
+                              <span className="text-sm text-muted-foreground">{log.unit}</span>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 flex-col gap-1">
+                            {isPending && (
+                              <Button
+                                variant="link"
+                                className="h-auto p-0"
+                                onClick={() => void confirmLog(log.id)}
+                              >
+                                Confirm
+                              </Button>
+                            )}
+                            <Button
+                              variant="link"
+                              className="h-auto p-0 text-destructive"
+                              onClick={() => void removeLog(log.id)}
+                            >
+                              Remove
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex shrink-0 flex-col gap-1">
-                          {isPending && (
-                            <button
-                              type="button"
-                              onClick={() => void confirmLog(log.id)}
-                              className="text-sm font-semibold text-primary"
-                            >
-                              Confirm
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => void removeLog(log.id)}
-                            className="text-sm text-danger"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {showAddFood && (
+                <Button
+                  variant="link"
+                  className="h-auto p-0"
+                  onClick={() => selectMealForAdd(meal.id)}
+                >
+                  Add food to this meal
+                </Button>
+              )}
+            </CardContent>
+          </Card>
         ))}
       </div>
 
       {showAddFood && (
-        <div className="card mt-4 border border-border-light">
-          <h3 className="mb-3 font-semibold">Add food</h3>
-          <select
-            className="input-field mb-2"
-            value={activeMealId}
-            onChange={(e) => setActiveMealId(e.target.value)}
-          >
-            {meals.map((meal) => (
-              <option key={meal.id} value={meal.id}>
-                {meal.name}
-                {formatMealTime(meal.mealTime) ? ` (${formatMealTime(meal.mealTime)})` : ''}
-              </option>
-            ))}
-          </select>
-          <select
-            className="input-field"
-            value={foodId}
-            onChange={(e) => setFoodId(e.target.value)}
-          >
-            <option value="">Select food…</option>
-            {(foodsQuery.data ?? []).map((food) => (
-              <option key={food.id} value={food.id}>
-                {food.brand ? `${food.brand} - ` : ''}
-                {food.name}
-              </option>
-            ))}
-          </select>
-          <input
-            className="input-field"
-            placeholder="Quantity (g)"
-            inputMode="decimal"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-          />
-          <button
-            type="button"
-            className="btn-secondary w-full"
-            onClick={() => void addFood()}
-            disabled={saving}
-          >
-            {saving ? 'Adding…' : 'Log extra food'}
-          </button>
-          <Link to="/foods/search" className="link mt-2 block text-center text-sm">
-            Search or add new foods
-          </Link>
+        <div ref={addFoodFormRef}>
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-base">
+              Add food to {meals.find((meal) => meal.id === activeMealId)?.name ?? 'selected meal'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <select
+              className={selectClass}
+              value={activeMealId}
+              onChange={(e) => setActiveMealId(e.target.value)}
+            >
+              {meals.map((meal) => (
+                <option key={meal.id} value={meal.id}>
+                  {meal.name}
+                  {formatMealTime(meal.mealTime) ? ` (${formatMealTime(meal.mealTime)})` : ''}
+                </option>
+              ))}
+            </select>
+            <select className={selectClass} value={foodId} onChange={(e) => setFoodId(e.target.value)}>
+              <option value="">Select food…</option>
+              {(foodsQuery.data ?? []).map((food) => (
+                <option key={food.id} value={food.id}>
+                  {food.brand ? `${food.brand} - ` : ''}
+                  {food.name}
+                </option>
+              ))}
+            </select>
+            <Input
+              placeholder="Quantity (g)"
+              inputMode="decimal"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+            />
+            <Button variant="outline" className="w-full" onClick={() => void addFood()} disabled={saving}>
+              {saving ? 'Adding…' : 'Log extra food'}
+            </Button>
+            <Button variant="link" className="w-full" asChild>
+              <Link to="/foods/search">Search or add new foods</Link>
+            </Button>
+          </CardContent>
+        </Card>
         </div>
       )}
     </div>

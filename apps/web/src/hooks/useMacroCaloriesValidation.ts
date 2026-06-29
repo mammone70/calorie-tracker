@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { caloriesFromMacros, macrosMatchCalories } from '@calorie-tracker/shared';
+import { caloriesFromMacros, macrosMatchCalories, roundMacroValue } from '@calorie-tracker/shared';
 
 export type MacroCaloriesFieldValues = {
   calories: string;
@@ -50,7 +50,7 @@ export function getMacroCaloriesValidation(
     };
   }
 
-  const diff = enteredCalories - computedCalories;
+  const diff = roundMacroValue(enteredCalories) - computedCalories;
   const diffLabel =
     diff > 0 ? `${diff} cal over` : diff < 0 ? `${Math.abs(diff)} cal under` : 'mismatch';
 
@@ -58,8 +58,8 @@ export function getMacroCaloriesValidation(
     show: true,
     isValid: false,
     computedCalories,
-    enteredCalories,
-    message: `Macros add up to ${computedCalories} cal — entered ${enteredCalories} cal (${diffLabel})`,
+    enteredCalories: roundMacroValue(enteredCalories),
+    message: `Macros add up to ${computedCalories} cal — entered ${roundMacroValue(enteredCalories)} cal (${diffLabel})`,
   };
 }
 

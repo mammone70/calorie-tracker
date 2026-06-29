@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { PageHeader } from '../components/PageHeader';
 import { api, localStore } from '../lib/client';
 import { todayDateString } from '@calorie-tracker/client';
 import type { FoodSearchResult } from '@calorie-tracker/shared';
+import { formatNutrientsSummary } from '@calorie-tracker/shared';
 
 export function FoodSearchPage() {
   const [query, setQuery] = useState('');
@@ -62,48 +66,51 @@ export function FoodSearchPage() {
   return (
     <div>
       <PageHeader title="Search Foods" backTo="/foods" />
-      <div className="mx-auto max-w-lg px-4 pb-8">
+      <div className="mx-auto w-full min-w-0 max-w-lg px-4 pb-8">
         <div className="my-4 flex gap-2">
-          <input
-            className="input-field mb-0 flex-1"
+          <Input
+            className="mb-0 flex-1"
             placeholder="Search USDA & Open Food Facts…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && setSearchTerm(query)}
           />
-          <button type="button" className="btn-primary shrink-0" onClick={() => setSearchTerm(query)}>
+          <Button className="shrink-0" onClick={() => setSearchTerm(query)}>
             Search
-          </button>
+          </Button>
         </div>
 
         {message && <p className="mb-4 text-sm text-primary">{message}</p>}
 
-        {searchTerm.length >= 2 && isFetching && <p className="text-muted">Searching…</p>}
+        {searchTerm.length >= 2 && isFetching && (
+          <p className="text-muted-foreground">Searching…</p>
+        )}
 
         <ul className="space-y-2">
           {(data ?? []).map((item) => (
             <li key={`${item.source}:${item.externalId}`}>
-              <button
-                type="button"
-                onClick={() => void saveFood(item)}
-                className="card w-full border border-border-light text-left"
-              >
-                <p className="font-semibold">{item.name}</p>
-                {item.brand && <p className="text-sm text-muted">{item.brand}</p>}
-                <p className="mt-1.5 text-sm text-foreground-secondary">
-                  {item.nutrientsPer100g.calories} cal · P {item.nutrientsPer100g.protein}g · F{' '}
-                  {item.nutrientsPer100g.fat}g · C {item.nutrientsPer100g.carbs}g / 100g
-                </p>
-                <p className="mt-1 text-xs capitalize text-muted">
-                  {item.source.replace('_', ' ')}
-                </p>
+              <button type="button" onClick={() => void saveFood(item)} className="w-full text-left">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{item.name}</CardTitle>
+                    {item.brand && <CardDescription>{item.brand}</CardDescription>}
+                  </CardHeader>
+                  <CardContent className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      {formatNutrientsSummary(item.nutrientsPer100g)} / 100g
+                    </p>
+                    <p className="text-xs capitalize text-muted-foreground">
+                      {item.source.replace('_', ' ')}
+                    </p>
+                  </CardContent>
+                </Card>
               </button>
             </li>
           ))}
         </ul>
 
         {searchTerm.length >= 2 && !isFetching && (data ?? []).length === 0 && (
-          <p className="py-6 text-center text-muted">
+          <p className="py-6 text-center text-muted-foreground">
             No results. Try a different term or add manually. Note: USDA search requires an API key
             on the server.
           </p>

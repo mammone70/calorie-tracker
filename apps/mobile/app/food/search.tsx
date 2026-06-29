@@ -13,6 +13,7 @@ import { api } from '../../lib/api';
 import { localCreateFood, localCreateFoodLog } from '../../lib/local-store';
 import { todayDateString } from '../../lib/utils';
 import type { FoodSearchResult } from '@calorie-tracker/shared';
+import { formatNutrientsSummary } from '@calorie-tracker/shared';
 import { AppTextInput } from '../../components/AppTextInput';
 import { colors } from '../../lib/theme';
 
@@ -112,8 +113,7 @@ export default function FoodSearchScreen() {
             <Text style={styles.name}>{item.name}</Text>
             {item.brand ? <Text style={styles.brand}>{item.brand}</Text> : null}
             <Text style={styles.macros}>
-              {item.nutrientsPer100g.calories} cal · P {item.nutrientsPer100g.protein}g · F{' '}
-              {item.nutrientsPer100g.fat}g · C {item.nutrientsPer100g.carbs}g / 100g
+              {formatNutrientsSummary(item.nutrientsPer100g)} / 100g
             </Text>
             <Text style={styles.source}>{item.source.replace('_', ' ')}</Text>
           </TouchableOpacity>

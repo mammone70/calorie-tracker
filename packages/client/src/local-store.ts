@@ -327,6 +327,44 @@ export function createLocalStore(api: ApiClient, db: LocalDatabase, sync: SyncEn
     return record;
   }
 
+  async function localUpdateWeeklyMealPlanEntry(
+    userId: string,
+    id: string,
+    input: Partial<WeeklyMealPlanEntryInput>,
+  ) {
+    const now = new Date().toISOString();
+    const entries = await db.getWeeklyMealPlanEntries(userId);
+    const existing = entries.find((entry) => entry.id === id);
+    if (!existing) throw new Error('Weekly meal plan entry not found');
+
+    const updated = {
+      ...existing,
+      ...(input.weeklyMealId !== undefined && { weeklyMealId: input.weeklyMealId }),
+      ...(input.foodId !== undefined && { foodId: input.foodId }),
+      ...(input.quantity !== undefined && { quantity: input.quantity }),
+      ...(input.unit !== undefined && { unit: input.unit }),
+      updatedAt: now,
+    };
+
+    await db.insertWeeklyMealPlanEntry(updated);
+
+    await queueMutation({
+      entityType: 'weekly_meal_plan_entries',
+      entityId: id,
+      action: 'update',
+      payload: input as unknown as Record<string, unknown>,
+      clientUpdatedAt: now,
+    });
+
+    try {
+      await runSync();
+    } catch {
+      // queued for later
+    }
+
+    return updated;
+  }
+
   async function localUpdateWeeklyMeal(userId: string, id: string, input: Partial<WeeklyMealInput>) {
     const now = new Date().toISOString();
     const meals = await db.getWeeklyMeals(userId);
@@ -468,6 +506,7 @@ export function createLocalStore(api: ApiClient, db: LocalDatabase, sync: SyncEn
     localRemoveMacroTarget,
     localUpsertWeeklyMacroTarget,
     localCreateWeeklyMealPlanEntry,
+    localUpdateWeeklyMealPlanEntry,
     localRemoveWeeklyMealPlanEntry,
     localUpdateWeeklyMeal,
     localSetWeeklyMealCount,

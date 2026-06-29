@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { PageHeader } from '../components/PageHeader';
+import { cn, selectClass } from '@/lib/utils';
 import { api, localStore } from '../lib/client';
 import {
   DEFAULT_MEAL_COUNT,
@@ -26,6 +31,7 @@ export function WeeklyMealPlansPage() {
   const [messageIsError, setMessageIsError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [mealNames, setMealNames] = useState<Record<string, string>>({});
+  const [entryQuantities, setEntryQuantities] = useState<Record<string, string>>({});
   const [initializedDays, setInitializedDays] = useState<Set<number>>(new Set());
 
   const mealsQuery = useQuery({
@@ -78,6 +84,14 @@ export function WeeklyMealPlansPage() {
     }
     setMealNames(next);
   }, [mealsQuery.data]);
+
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const entry of entriesQuery.data ?? []) {
+      next[entry.id] = String(entry.quantity);
+    }
+    setEntryQuantities(next);
+  }, [entriesQuery.data]);
 
   useEffect(() => {
     if (mealsQuery.isLoading || initializedDays.has(activeDay)) return;
@@ -220,11 +234,37 @@ export function WeeklyMealPlansPage() {
     }
   };
 
+  const updateEntryQuantity = async (entry: WeeklyMealPlanEntry) => {
+    const raw = entryQuantities[entry.id];
+    const qty = Number(raw);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setMessage('Enter a valid quantity in grams');
+      setMessageIsError(true);
+      return;
+    }
+    if (qty === entry.quantity) return;
+
+    setMessage('');
+    try {
+      const userId = api.getUserId();
+      if (userId) {
+        await localStore.localUpdateWeeklyMealPlanEntry(userId, entry.id, { quantity: qty });
+      } else {
+        await api.updateWeeklyMealPlan(entry.id, { quantity: qty });
+      }
+      await queryClient.invalidateQueries({ queryKey: ['weekly-meal-plans'] });
+      await queryClient.invalidateQueries({ queryKey: ['meal-plans-effective'] });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to update quantity');
+      setMessageIsError(true);
+    }
+  };
+
   if (mealsQuery.isLoading || entriesQuery.isLoading || foodsQuery.isLoading) {
     return (
       <div>
         <PageHeader title="Weekly Meal Plans" backTo="/settings" />
-        <div className="flex justify-center py-16 text-muted">Loading…</div>
+        <div className="flex justify-center py-16 text-muted-foreground">Loading…</div>
       </div>
     );
   }
@@ -232,186 +272,198 @@ export function WeeklyMealPlansPage() {
   return (
     <div>
       <PageHeader title="Weekly Meal Plans" backTo="/settings" />
-      <div className="mx-auto max-w-lg px-4 pb-8">
-        <p className="my-4 text-sm text-muted">
+      <div className="mx-auto w-full min-w-0 max-w-lg px-4 pb-8">
+        <p className="my-4 text-sm text-muted-foreground">
           Set default meals and foods for each day of the week. Choose how many meals you eat (1–10)
           and optionally set a time for each.
         </p>
 
         {message && (
-          <p className={`mb-4 text-sm ${messageIsError ? 'text-danger' : 'text-primary'}`}>
+          <p className={cn('mb-4 text-sm', messageIsError ? 'text-destructive' : 'text-primary')}>
             {message}
           </p>
         )}
 
         <div className="mb-4 flex gap-1 overflow-x-auto pb-1">
           {WEEKDAYS.map((dayName, index) => (
-            <button
+            <Button
               key={dayName}
               type="button"
+              size="sm"
+              variant={activeDay === index ? 'default' : 'secondary'}
+              className="shrink-0"
               onClick={() => setActiveDay(index as WeekdayIndex)}
-              className={`shrink-0 rounded-lg px-3 py-2 text-sm font-semibold ${
-                activeDay === index ? 'bg-primary-dark text-white' : 'bg-surface text-muted'
-              }`}
             >
               {dayName.slice(0, 3)}
-            </button>
+            </Button>
           ))}
         </div>
 
-        <div className="card mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold">{WEEKDAYS[activeDay]}</h2>
-            <p className="text-sm text-muted">{activeMeals.length} meals</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn-secondary px-3 py-1 text-lg leading-none"
-              disabled={activeMeals.length <= MIN_MEALS_PER_DAY || saving}
-              onClick={() => void setMealCount(activeDay, activeMeals.length - 1)}
-              aria-label="Fewer meals"
-            >
-              −
-            </button>
-            <span className="min-w-[1.5rem] text-center font-semibold">{activeMeals.length}</span>
-            <button
-              type="button"
-              className="btn-secondary px-3 py-1 text-lg leading-none"
-              disabled={activeMeals.length >= MAX_MEALS_PER_DAY || saving}
-              onClick={() => void setMealCount(activeDay, activeMeals.length + 1)}
-              aria-label="More meals"
-            >
-              +
-            </button>
-          </div>
-        </div>
+        <Card className="mb-4">
+          <CardContent className="flex items-center justify-between gap-3 pt-4">
+            <div>
+              <h2 className="text-lg font-bold">{WEEKDAYS[activeDay]}</h2>
+              <p className="text-sm text-muted-foreground">{activeMeals.length} meals</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={activeMeals.length <= MIN_MEALS_PER_DAY || saving}
+                onClick={() => void setMealCount(activeDay, activeMeals.length - 1)}
+                aria-label="Fewer meals"
+              >
+                −
+              </Button>
+              <span className="min-w-[1.5rem] text-center font-semibold">{activeMeals.length}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={activeMeals.length >= MAX_MEALS_PER_DAY || saving}
+                onClick={() => void setMealCount(activeDay, activeMeals.length + 1)}
+                aria-label="More meals"
+              >
+                +
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="space-y-4">
           {activeMeals.map((meal) => {
             const mealEntries = entriesByMealId.get(meal.id) ?? [];
             return (
-              <section key={meal.id} className="card">
-                <div className="mb-3 flex flex-wrap items-end gap-2">
-                  <div className="min-w-0 flex-1">
-                    <label className="mb-1 block text-xs font-medium text-muted">Meal name</label>
-                    <input
-                      className="input-field"
-                      value={mealNames[meal.id] ?? meal.name}
-                      onChange={(e) =>
-                        setMealNames((prev) => ({ ...prev, [meal.id]: e.target.value }))
-                      }
-                      onBlur={() => {
-                        const name = mealNames[meal.id];
-                        if (name !== undefined && name !== meal.name) {
-                          void updateMeal(meal, { name });
+              <Card key={meal.id}>
+                <CardContent className="space-y-3 pt-4">
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="min-w-0 flex-1">
+                      <Label className="mb-1 text-xs text-muted-foreground">Meal name</Label>
+                      <Input
+                        value={mealNames[meal.id] ?? meal.name}
+                        onChange={(e) =>
+                          setMealNames((prev) => ({ ...prev, [meal.id]: e.target.value }))
                         }
-                      }}
-                    />
+                        onBlur={() => {
+                          const name = mealNames[meal.id];
+                          if (name !== undefined && name !== meal.name) {
+                            void updateMeal(meal, { name });
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="w-28">
+                      <Label className="mb-1 text-xs text-muted-foreground">Time</Label>
+                      <Input
+                        type="time"
+                        value={normalizeMealTime(meal.mealTime) ?? ''}
+                        onChange={(e) =>
+                          void updateMeal(meal, { mealTime: e.target.value || null })
+                        }
+                      />
+                    </div>
                   </div>
-                  <div className="w-28">
-                    <label className="mb-1 block text-xs font-medium text-muted">Time</label>
-                    <input
-                      type="time"
-                      className="input-field"
-                      value={normalizeMealTime(meal.mealTime) ?? ''}
-                      onChange={(e) =>
-                        void updateMeal(meal, { mealTime: e.target.value || null })
-                      }
-                    />
-                  </div>
-                </div>
 
-                {mealEntries.length === 0 ? (
-                  <p className="mb-3 text-sm italic text-muted">No foods in this meal yet.</p>
-                ) : (
-                  <ul className="mb-3 space-y-2">
-                    {mealEntries.map((entry) => {
-                      const food = foodsMap.get(entry.foodId);
-                      return (
-                        <li
-                          key={entry.id}
-                          className="flex items-start justify-between gap-3 rounded-lg bg-surface px-3 py-2"
-                        >
-                          <div>
-                            <p className="font-medium">{food?.name ?? 'Unknown food'}</p>
-                            <p className="text-sm text-muted">
-                              {entry.quantity}
-                              {entry.unit}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => void removeEntry(entry.id)}
-                            className="text-sm text-danger"
+                  {mealEntries.length === 0 ? (
+                    <p className="text-sm italic text-muted-foreground">No foods in this meal yet.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {mealEntries.map((entry) => {
+                        const food = foodsMap.get(entry.foodId);
+                        return (
+                          <li
+                            key={entry.id}
+                            className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2"
                           >
-                            Remove
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium">{food?.name ?? 'Unknown food'}</p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <Input
+                                className="mb-0 w-20 text-right"
+                                inputMode="decimal"
+                                aria-label={`Quantity for ${food?.name ?? 'food'}`}
+                                value={entryQuantities[entry.id] ?? String(entry.quantity)}
+                                onChange={(e) =>
+                                  setEntryQuantities((prev) => ({
+                                    ...prev,
+                                    [entry.id]: e.target.value,
+                                  }))
+                                }
+                                onBlur={() => void updateEntryQuantity(entry)}
+                              />
+                              <span className="text-sm text-muted-foreground">{entry.unit}</span>
+                              <Button
+                                type="button"
+                                variant="link"
+                                className="h-auto p-0 text-destructive"
+                                onClick={() => void removeEntry(entry.id)}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
 
-                <button
-                  type="button"
-                  className="text-sm text-primary"
-                  onClick={() => setActiveMealId(meal.id)}
-                >
-                  {activeMealId === meal.id ? 'Adding food here' : 'Add food to this meal'}
-                </button>
-              </section>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto p-0"
+                    onClick={() => setActiveMealId(meal.id)}
+                  >
+                    Add food to this meal
+                  </Button>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
 
         {activeMeals.length > 0 && (
-          <div className="card mt-4 border border-border-light">
-            <h3 className="mb-3 font-semibold">
-              Add food to{' '}
-              {activeMeals.find((meal) => meal.id === activeMealId)?.name ?? 'selected meal'}
-            </h3>
-            <select
-              className="input-field mb-2"
-              value={activeMealId}
-              onChange={(e) => setActiveMealId(e.target.value)}
-            >
-              {activeMeals.map((meal) => (
-                <option key={meal.id} value={meal.id}>
-                  {meal.name}
-                  {formatMealTime(meal.mealTime) ? ` (${formatMealTime(meal.mealTime)})` : ''}
-                </option>
-              ))}
-            </select>
-            <select
-              className="input-field"
-              value={foodId}
-              onChange={(e) => setFoodId(e.target.value)}
-            >
-              <option value="">Select food…</option>
-              {(foodsQuery.data ?? []).map((food) => (
-                <option key={food.id} value={food.id}>
-                  {food.brand ? `${food.brand} - ` : ''}
-                  {food.name}
-                </option>
-              ))}
-            </select>
-            <input
-              className="input-field"
-              placeholder="Quantity (g)"
-              inputMode="decimal"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-            />
-            <button
-              type="button"
-              className="btn-primary w-full"
-              onClick={() => void addEntry()}
-              disabled={saving}
-            >
-              {saving ? 'Adding…' : 'Add to template'}
-            </button>
-          </div>
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="text-base">
+                Add food to{' '}
+                {activeMeals.find((meal) => meal.id === activeMealId)?.name ?? 'selected meal'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <select
+                className={selectClass}
+                value={activeMealId}
+                onChange={(e) => setActiveMealId(e.target.value)}
+              >
+                {activeMeals.map((meal) => (
+                  <option key={meal.id} value={meal.id}>
+                    {meal.name}
+                    {formatMealTime(meal.mealTime) ? ` (${formatMealTime(meal.mealTime)})` : ''}
+                  </option>
+                ))}
+              </select>
+              <select className={selectClass} value={foodId} onChange={(e) => setFoodId(e.target.value)}>
+                <option value="">Select food…</option>
+                {(foodsQuery.data ?? []).map((food) => (
+                  <option key={food.id} value={food.id}>
+                    {food.brand ? `${food.brand} - ` : ''}
+                    {food.name}
+                  </option>
+                ))}
+              </select>
+              <Input
+                placeholder="Quantity (g)"
+                inputMode="decimal"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+              />
+              <Button type="button" className="w-full" onClick={() => void addEntry()} disabled={saving}>
+                {saving ? 'Adding…' : 'Add to template'}
+              </Button>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

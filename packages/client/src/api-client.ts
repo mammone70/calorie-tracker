@@ -191,6 +191,10 @@ export class ApiClient {
     return this.request('/weekly-meal-plans', { method: 'POST', body });
   }
 
+  updateWeeklyMealPlan(id: string, body: unknown) {
+    return this.request(`/weekly-meal-plans/${id}`, { method: 'PATCH', body });
+  }
+
   deleteWeeklyMealPlan(id: string) {
     return this.request(`/weekly-meal-plans/${id}`, { method: 'DELETE' });
   }
