@@ -1,0 +1,259 @@
+# Production deployment (Ubuntu VPS)
+
+Deploy the Calorie Tracker API (NestJS) and web PWA (static Vite build) to a single Ubuntu VPS using Docker Compose and host nginx (TLS via certbot).
+
+## Architecture
+
+| Component | Role |
+|-----------|------|
+| **Host nginx** | HTTPS, serves `apps/web/dist`, proxies `/api/*` to API on localhost |
+| **API** | NestJS on `127.0.0.1:3000` (not exposed publicly) |
+| **Postgres** | Database (internal network only, not exposed publicly) |
+
+Future mobile apps connect to the same HTTPS API URL (`https://mammonesoftware.org/api`) — no CORS changes needed for native clients.
+
+## Prerequisites
+
+- Ubuntu 22.04+ VPS with root/sudo access
+- nginx already installed and serving port 80/443
+- Domain name pointed at the VPS (A record → VPS IP)
+- GitHub repository with this code
+- [USDA API key](https://fdc.nal.usda.gov/api-key-signup.html) (optional)
+
+## 1. VPS bootstrap (one time)
+
+### Install Docker
+
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+```
+
+### Create deploy user
+
+```bash
+sudo adduser deploy
+sudo usermod -aG docker deploy
+```
+
+Copy your SSH public key to `/home/deploy/.ssh/authorized_keys`.
+
+### Firewall (UFW)
+
+```bash
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+Restrict SSH to your IP if possible:
+
+```bash
+sudo ufw delete allow OpenSSH
+sudo ufw allow from YOUR.IP.ADDRESS to any port 22
+```
+
+**Do not** open extra ports for Docker — the API binds to `127.0.0.1:3000` only.
+
+### SSH hardening
+
+Edit `/etc/ssh/sshd_config`:
+
+- `PasswordAuthentication no`
+- `PermitRootLogin no`
+- `PubkeyAuthentication yes`
+
+Then: `sudo systemctl restart sshd`
+
+### App directory
+
+```bash
+sudo mkdir -p /opt/calorie-tracker/backups
+sudo chown deploy:deploy /opt/calorie-tracker
+```
+
+### nginx site config
+
+After the first code sync to `/opt/calorie-tracker`:
+
+```bash
+sudo cp /opt/calorie-tracker/deploy/nginx/calorie-tracker.conf \
+  /etc/nginx/sites-available/calorie-tracker
+sudo ln -sf /etc/nginx/sites-available/calorie-tracker /etc/nginx/sites-enabled/
+```
+
+If nginx already has a server block for `mammonesoftware.org`, merge the `/api/` proxy and SPA `try_files` from `deploy/nginx/calorie-tracker.conf` into that existing block instead of enabling a conflicting `server_name`.
+
+TLS (skip if cert already exists for this domain):
+
+```bash
+sudo certbot --nginx -d mammonesoftware.org
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+## 2. Configure secrets
+
+On the VPS, create `/opt/calorie-tracker/.env` from the example:
+
+```bash
+cp deploy/.env.production.example .env
+nano .env
+```
+
+Required values:
+
+| Variable | Example |
+|----------|---------|
+| `POSTGRES_PASSWORD` | `openssl rand -hex 32` |
+| `JWT_ACCESS_SECRET` | `openssl rand -hex 32` |
+| `JWT_REFRESH_SECRET` | `openssl rand -hex 32` |
+| `WEB_ORIGIN` | `https://mammonesoftware.org` |
+| `ALLOW_REGISTRATION` | `false` |
+
+**Never commit `.env` to git.**
+
+## 3. First manual deploy
+
+Before CI is wired up, deploy once by hand:
+
+```bash
+# On your dev machine — build web with production API URL
+VITE_API_URL=https://mammonesoftware.org/api pnpm install
+pnpm build:packages
+pnpm --filter @calorie-tracker/web build
+
+# Sync to VPS (adjust user/host)
+rsync -az --exclude '.env' --exclude 'backups/' \
+  ./ deploy@YOUR_VPS:/opt/calorie-tracker/
+
+# On VPS
+cd /opt/calorie-tracker
+docker compose -f docker-compose.prod.yml build api
+docker compose -f docker-compose.prod.yml --profile migrate run --rm migrate
+docker compose -f docker-compose.prod.yml up -d
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Verify:
+
+```bash
+curl -s https://mammonesoftware.org/api/health
+```
+
+## 4. Create the first user (invite-only)
+
+Registration is disabled when `ALLOW_REGISTRATION=false`. Create accounts with:
+
+```bash
+cd /opt/calorie-tracker
+docker compose -f docker-compose.prod.yml run --rm --entrypoint node api \
+  packages/db/scripts/create-user.js you@example.com 'your-secure-password'
+```
+
+Alternatively, temporarily set `ALLOW_REGISTRATION=true` in `.env`, restart the API, register via the web UI, then set it back to `false`:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d api
+```
+
+## 5. GitHub Actions automated deploy
+
+Deploys run when you push a version tag (e.g. `v0.1.0`):
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+### GitHub repository secrets
+
+| Secret | Value |
+|--------|-------|
+| `VPS_HOST` | VPS IP or hostname |
+| `VPS_USER` | `deploy` |
+| `SSH_PRIVATE_KEY` | Private key for deploy user (PEM contents) |
+| `PRODUCTION_API_URL` | `https://mammonesoftware.org/api` |
+
+The workflow (`.github/workflows/deploy-production.yml`) builds the web app, rsyncs to the VPS, rebuilds the API image, runs migrations, restarts services, and reloads nginx.
+
+### Rollback
+
+SSH to the VPS and checkout a previous tag, then redeploy:
+
+```bash
+cd /opt/calorie-tracker
+git fetch --tags
+git checkout v0.0.9   # if git history exists on server; otherwise re-run workflow for old tag
+docker compose -f docker-compose.prod.yml build api
+docker compose -f docker-compose.prod.yml up -d
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+With the rsync-based deploy, rollback is typically: push an older tag again from GitHub.
+
+## 6. Database backups
+
+See [BACKUP.md](./BACKUP.md) for automated daily backups and restore procedures.
+
+Quick setup:
+
+```bash
+sudo cp deploy/systemd/calorie-tracker-backup.* /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now calorie-tracker-backup.timer
+```
+
+## 7. Security summary
+
+| Control | Status |
+|---------|--------|
+| HTTPS (Let's Encrypt via certbot + nginx) | Yes |
+| API bound to localhost only | `127.0.0.1:3000` |
+| Postgres not publicly exposed | Docker internal network |
+| JWT auth on all data routes | Yes |
+| bcrypt password hashing (cost 12) | Yes |
+| Refresh token rotation | Yes |
+| Invite-only registration | `ALLOW_REGISTRATION=false` |
+| Auth rate limiting | 10 req/min per IP on `/api/auth/*` |
+| Security headers (Helmet + nginx) | Yes |
+| Production JWT secret validation | Fails fast if missing/weak |
+
+## 8. Operations cheat sheet
+
+```bash
+# Logs
+docker compose -f docker-compose.prod.yml logs -f api
+
+# Restart after .env change
+docker compose -f docker-compose.prod.yml up -d
+
+# Reload nginx after static file deploy
+sudo nginx -t && sudo systemctl reload nginx
+
+# Run migrations manually
+docker compose -f docker-compose.prod.yml --profile migrate run --rm migrate
+
+# Manual backup
+./deploy/scripts/backup-db.sh
+```
+
+## 9. Mobile app (future)
+
+Point the Expo app at your production API:
+
+```json
+"extra": {
+  "apiUrl": "https://mammonesoftware.org/api"
+}
+```
+
+Same JWT login/refresh/sync endpoints as the web app.
