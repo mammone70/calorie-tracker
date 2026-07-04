@@ -8,6 +8,7 @@
     "allowSyntheticDefaultImports": true,
     "target": "ES2022",
     "lib": ["ES2022"],
+    "types": ["node"],
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
