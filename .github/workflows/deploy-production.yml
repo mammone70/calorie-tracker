@@ -44,7 +44,7 @@ jobs:
           cp -r apps/web/dist deploy-bundle/apps/web/
           cp docker-compose.prod.yml .dockerignore deploy-bundle/
           cp -r deploy deploy-bundle/
-          cp pnpm-lock.yaml pnpm-workspace.yaml package.json deploy-bundle/
+          cp pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json deploy-bundle/
           rsync -a --exclude node_modules --exclude dist packages/shared/ deploy-bundle/packages/shared/
           rsync -a --exclude node_modules --exclude dist packages/db/ deploy-bundle/packages/db/
           rsync -a --exclude node_modules --exclude dist apps/api/ deploy-bundle/apps/api/
