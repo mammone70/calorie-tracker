@@ -40,11 +40,10 @@ jobs:
 
       - name: Prepare deployment bundle
         run: |
-          mkdir -p deploy-bundle/apps/web
+          mkdir -p deploy-bundle/apps/web deploy-bundle/apps/api deploy-bundle/packages
           cp -r apps/web/dist deploy-bundle/apps/web/
           cp docker-compose.prod.yml deploy-bundle/
           cp -r deploy deploy-bundle/
-          cp apps/api/Dockerfile deploy-bundle/apps/api/Dockerfile
           cp pnpm-lock.yaml pnpm-workspace.yaml package.json deploy-bundle/
           cp -r packages/shared deploy-bundle/packages/shared
           cp -r packages/db deploy-bundle/packages/db
