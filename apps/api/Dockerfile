@@ -17,6 +17,9 @@ COPY packages/shared packages/shared
 COPY packages/db packages/db
 COPY apps/api apps/api
 
+# COPY replaces workspace dirs and removes node_modules created above (bundle has no node_modules).
+RUN pnpm install --frozen-lockfile --filter @calorie-tracker/api...
+
 RUN pnpm --filter @calorie-tracker/shared build \
   && pnpm --filter @calorie-tracker/db build \
   && pnpm --filter @calorie-tracker/api build
