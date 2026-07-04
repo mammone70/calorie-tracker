@@ -78,11 +78,16 @@ Open [http://localhost:5173](http://localhost:5173). The web app talks to the AP
 
 ## Production build
 
+See [deploy/DEPLOY.md](deploy/DEPLOY.md) for full VPS deployment instructions.
+
 ```bash
-pnpm --filter @calorie-tracker/web build
-# Static output in apps/web/dist — serve with any static host
-# Set WEB_ORIGIN on the API to your production web URL for CORS
+pnpm build:packages
+VITE_API_URL=https://mammonesoftware.org/api pnpm --filter @calorie-tracker/web build
+# Static output in apps/web/dist — served by host nginx in production
+# Set WEB_ORIGIN and ALLOW_REGISTRATION=false on the API for production
 ```
+
+Production deploys are triggered by pushing a version tag (e.g. `v0.1.0`) — see `.github/workflows/deploy-production.yml`.
 
 ## Development scripts
 

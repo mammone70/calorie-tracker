@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+**/dist
+.git
+.github
+apps/web/dist
+apps/mobile
+*.md
+.env
+.env.*
+!.env.example
+deploy/backups
+.cursor
+terminals

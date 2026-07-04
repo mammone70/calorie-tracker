@@ -11,6 +11,7 @@
     "seed:foods": "node scripts/seed-foods.js",
     "seed:meal-plan": "node scripts/seed-weekly-meal-plan.js",
     "update:meal-times": "node scripts/update-meal-times.js",
+    "create:user": "node scripts/create-user.js",
     "migrate:kit": "drizzle-kit migrate",
     "studio": "drizzle-kit studio"
   },

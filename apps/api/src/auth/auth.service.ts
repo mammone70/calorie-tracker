@@ -12,6 +12,7 @@ import { eq } from 'drizzle-orm';
 import { users, refreshTokens, type DbClient } from '@calorie-tracker/db';
 import type { LoginInput, RegisterInput } from '@calorie-tracker/shared';
 import { DB } from '../database/database.module';
+import { getJwtAccessSecret, getJwtRefreshSecret } from '../config/env.validation';
 
 @Injectable()
 export class AuthService {
@@ -77,8 +78,7 @@ export class AuthService {
     let payload: { sub: string; email: string };
     try {
       payload = await this.jwt.verifyAsync(refreshToken, {
-        secret:
-          this.config.get<string>('JWT_REFRESH_SECRET') ?? 'dev-refresh-secret',
+        secret: getJwtRefreshSecret(),
       });
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
@@ -100,8 +100,7 @@ export class AuthService {
     const accessToken = await this.jwt.signAsync(
       { sub: userId, email },
       {
-        secret:
-          this.config.get<string>('JWT_ACCESS_SECRET') ?? 'dev-access-secret',
+        secret: getJwtAccessSecret(),
         expiresIn: this.config.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '15m',
       },
     );
@@ -109,8 +108,7 @@ export class AuthService {
     const refreshToken = await this.jwt.signAsync(
       { sub: userId, email },
       {
-        secret:
-          this.config.get<string>('JWT_REFRESH_SECRET') ?? 'dev-refresh-secret',
+        secret: getJwtRefreshSecret(),
         expiresIn: this.config.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '30d',
       },
     );

@@ -1,0 +1,89 @@
+name: Deploy Production
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: pnpm build:packages
+
+      - name: Build web app
+        env:
+          VITE_API_URL: ${{ secrets.PRODUCTION_API_URL }}
+        run: pnpm --filter @calorie-tracker/web build
+
+      - name: Prepare deployment bundle
+        run: |
+          mkdir -p deploy-bundle/apps/web
+          cp -r apps/web/dist deploy-bundle/apps/web/
+          cp docker-compose.prod.yml deploy-bundle/
+          cp -r deploy deploy-bundle/
+          cp apps/api/Dockerfile deploy-bundle/apps/api/Dockerfile
+          cp pnpm-lock.yaml pnpm-workspace.yaml package.json deploy-bundle/
+          cp -r packages/shared deploy-bundle/packages/shared
+          cp -r packages/db deploy-bundle/packages/db
+          cp -r apps/api deploy-bundle/apps/api
+          # Remove dev artifacts from bundle
+          find deploy-bundle -name node_modules -prune -exec rm -rf {} + 2>/dev/null || true
+          find deploy-bundle -name dist -type d -not -path '*/apps/web/dist*' -prune -exec rm -rf {} + 2>/dev/null || true
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Sync files to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          rsync -az --delete \
+            --exclude '.env' \
+            --exclude 'backups/' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
+            deploy-bundle/ \
+            "${VPS_USER}@${VPS_HOST}:/opt/calorie-tracker/"
+
+      - name: Deploy on VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          DEPLOY_TAG: ${{ github.ref_name }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "${VPS_USER}@${VPS_HOST}" \
+            "cd /opt/calorie-tracker && \
+             echo 'Deploying ${DEPLOY_TAG}' && \
+             docker compose -f docker-compose.prod.yml build api && \
+             docker compose -f docker-compose.prod.yml --profile migrate run --rm migrate && \
+             docker compose -f docker-compose.prod.yml up -d && \
+             docker image prune -f && \
+             sudo nginx -t && sudo systemctl reload nginx"

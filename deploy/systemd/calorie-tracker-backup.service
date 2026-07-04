@@ -1,0 +1,11 @@
+[Unit]
+Description=Calorie Tracker Postgres backup
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/calorie-tracker
+ExecStart=/opt/calorie-tracker/deploy/scripts/backup-db.sh
+User=root
+
+[Install]
+WantedBy=multi-user.target
