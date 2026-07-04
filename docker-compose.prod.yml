@@ -56,7 +56,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: ['node', 'packages/db/scripts/migrate.js']
+    command: ['pnpm', '--filter', '@calorie-tracker/db', 'migrate']
     profiles:
       - migrate
     networks:
