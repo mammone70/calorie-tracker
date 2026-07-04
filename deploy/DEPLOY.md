@@ -174,6 +174,20 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
+**Before the first tag deploy:**
+
+1. Commit and push all deploy files to `main` (`apps/api/Dockerfile`, `docker-compose.prod.yml`, `deploy/`, `.github/workflows/`, etc.).
+2. Create `/opt/calorie-tracker/.env` on the VPS **before** pushing the tag. The workflow rsyncs code but never creates or overwrites `.env`.
+3. Push a **new** tag after workflow fixes — tags point at a fixed commit; reusing `v0.1.0` after fixes requires deleting and re-pushing the tag.
+
+Example first-time `.env` on the VPS (after `/opt/calorie-tracker` exists):
+
+```bash
+sudo -u deploy nano /opt/calorie-tracker/.env
+```
+
+Paste values from `deploy/.env.production.example` and fill in secrets (`openssl rand -hex 32` for passwords/JWT secrets).
+
 ### GitHub repository secrets
 
 | Secret | Value |

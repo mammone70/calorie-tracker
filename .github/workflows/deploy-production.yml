@@ -43,14 +43,18 @@ jobs:
           mkdir -p deploy-bundle/apps/web deploy-bundle/apps/api deploy-bundle/packages
           cp -r apps/web/dist deploy-bundle/apps/web/
           cp docker-compose.prod.yml deploy-bundle/
+          cp .dockerignore deploy-bundle/
           cp -r deploy deploy-bundle/
           cp pnpm-lock.yaml pnpm-workspace.yaml package.json deploy-bundle/
           cp -r packages/shared deploy-bundle/packages/shared
           cp -r packages/db deploy-bundle/packages/db
           cp -r apps/api deploy-bundle/apps/api
+          test -f deploy-bundle/apps/api/Dockerfile
+          test -f deploy-bundle/docker-compose.prod.yml
           # Remove dev artifacts from bundle
           find deploy-bundle -name node_modules -prune -exec rm -rf {} + 2>/dev/null || true
           find deploy-bundle -name dist -type d -not -path '*/apps/web/dist*' -prune -exec rm -rf {} + 2>/dev/null || true
+          test -f deploy-bundle/apps/api/Dockerfile
 
       - name: Configure SSH
         run: |
@@ -81,6 +85,8 @@ jobs:
             "${VPS_USER}@${VPS_HOST}" \
             "cd /opt/calorie-tracker && \
              echo 'Deploying ${DEPLOY_TAG}' && \
+             test -f .env || { echo 'ERROR: /opt/calorie-tracker/.env is missing. Create it from deploy/.env.production.example before deploying.'; exit 1; } && \
+             test -f apps/api/Dockerfile || { echo 'ERROR: apps/api/Dockerfile is missing after sync.'; ls -la apps/api || true; exit 1; } && \
              docker compose -f docker-compose.prod.yml build api && \
              docker compose -f docker-compose.prod.yml --profile migrate run --rm migrate && \
              docker compose -f docker-compose.prod.yml up -d && \
