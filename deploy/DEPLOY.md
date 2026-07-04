@@ -44,6 +44,24 @@ sudo usermod -aG docker deploy
 
 Copy your SSH public key to `/home/deploy/.ssh/authorized_keys`.
 
+### Allow GitHub Actions to reload nginx
+
+The deploy workflow runs `sudo nginx -t && sudo systemctl reload nginx` over SSH. Grant the `deploy` user passwordless sudo for those commands only:
+
+```bash
+sudo tee /etc/sudoers.d/deploy-nginx >/dev/null <<'EOF'
+deploy ALL=(ALL) NOPASSWD: /usr/sbin/nginx, /usr/bin/systemctl reload nginx
+EOF
+sudo chmod 440 /etc/sudoers.d/deploy-nginx
+sudo visudo -c
+```
+
+Verify as the deploy user:
+
+```bash
+sudo -n nginx -t && sudo -n systemctl reload nginx
+```
+
 ### Firewall (UFW)
 
 ```bash

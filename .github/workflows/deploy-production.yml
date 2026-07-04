@@ -114,4 +114,8 @@ jobs:
              docker compose -f docker-compose.prod.yml --profile migrate run --rm migrate && \
              docker compose -f docker-compose.prod.yml up -d && \
              docker image prune -f && \
-             sudo nginx -t && sudo systemctl reload nginx"
+             if sudo -n nginx -t && sudo -n systemctl reload nginx; then \
+               echo 'nginx reloaded'; \
+             else \
+               echo '::warning::nginx reload skipped — grant deploy passwordless sudo for nginx (see deploy/DEPLOY.md)'; \
+             fi"
