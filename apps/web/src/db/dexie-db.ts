@@ -167,6 +167,14 @@ export const dexieDatabase: LocalDatabase = {
     await dexie.dayMeals.update(id, { deletedAt, updatedAt });
   },
 
+  async insertMealPlanEntry(record) {
+    await dexie.mealPlanEntries.put(record);
+  },
+
+  async softDeleteMealPlanEntry(id, deletedAt, updatedAt) {
+    await dexie.mealPlanEntries.update(id, { deletedAt, updatedAt });
+  },
+
   async insertFood(record) {
     await dexie.foods.put(record);
   },
@@ -209,6 +217,14 @@ export const dexieDatabase: LocalDatabase = {
 
   async getDayMeals(userId) {
     return dexie.dayMeals.filter((row) => row.userId === userId && !row.deletedAt).toArray();
+  },
+
+  async getMealPlanEntries(userId, planDate) {
+    return dexie.mealPlanEntries
+      .filter(
+        (row) => row.userId === userId && !row.deletedAt && (!planDate || row.planDate === planDate),
+      )
+      .toArray();
   },
 
   async getFoods(userId) {

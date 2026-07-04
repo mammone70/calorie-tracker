@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ThemeToggle } from './ThemeToggle';
 import { cn } from '@/lib/utils';
@@ -10,8 +10,12 @@ const tabs = [
   { to: '/settings', label: 'Settings' },
 ];
 
+const mainTabPaths = new Set(tabs.map((tab) => tab.to));
+
 export function AppLayout() {
   const { isOnline } = useAuth();
+  const { pathname } = useLocation();
+  const showAppHeader = mainTabPaths.has(pathname);
 
   return (
     <div className="flex min-h-dvh flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] pt-safe-top">
@@ -20,12 +24,14 @@ export function AppLayout() {
           Offline — changes will sync when back online
         </div>
       )}
-      <header className="sticky top-0 z-30 border-b border-border bg-background px-4 py-2 shadow-[0_4px_24px_rgba(0,0,0,0.35)] pt-[max(0.5rem,env(safe-area-inset-top))]">
-        <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
-          <h1 className="truncate text-lg font-bold text-primary">Calorie Tracker</h1>
-          <ThemeToggle />
-        </div>
-      </header>
+      {showAppHeader && (
+        <header className="sticky top-0 z-30 border-b border-border bg-background px-4 py-2 shadow-[0_4px_24px_rgba(0,0,0,0.35)] pt-[max(0.5rem,env(safe-area-inset-top))]">
+          <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
+            <h1 className="truncate text-lg font-bold text-primary">Calorie Tracker</h1>
+            <ThemeToggle />
+          </div>
+        </header>
+      )}
       <main className="flex-1">
         <Outlet />
       </main>

@@ -1,10 +1,24 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { ThemeToggle } from './ThemeToggle';
 
-export function PageHeader({ title, backTo }: { title: string; backTo?: string }) {
+export function PageHeader({
+  title,
+  backTo,
+  embedded = false,
+}: {
+  title: string;
+  backTo?: string;
+  embedded?: boolean;
+}) {
   return (
-    <header className="sticky top-0 z-20 border-b border-border bg-background px-4 py-3 shadow-[0_4px_24px_rgba(0,0,0,0.35)] pt-[max(0.75rem,env(safe-area-inset-top))]">
+    <header
+      className={cn(
+        'border-b border-border bg-background px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]',
+        !embedded && 'sticky top-0 z-20 shadow-[0_4px_24px_rgba(0,0,0,0.35)]',
+      )}
+    >
       <div className="mx-auto flex max-w-lg items-center gap-3">
         {backTo && (
           <Button variant="link" className="h-auto shrink-0 p-0" asChild>

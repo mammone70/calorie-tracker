@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { MacroProgress } from '../components/MacroProgress';
 import { PageHeader } from '../components/PageHeader';
 import { cn, selectClass } from '@/lib/utils';
+import { computeNutrients, sumNutrients } from '@calorie-tracker/client';
 import { api, localStore } from '../lib/client';
 import {
   DEFAULT_MEAL_COUNT,
@@ -14,12 +17,21 @@ import {
   WEEKDAYS,
   defaultMealName,
   formatMealTime,
+  formatNutrientsSummary,
   normalizeMealTime,
   type Food,
   type WeekdayIndex,
   type WeeklyMeal,
   type WeeklyMealPlanEntry,
+  type WeeklyMacroTarget,
 } from '@calorie-tracker/shared';
+
+function hasWeeklyMacroTarget(target: WeeklyMacroTarget | undefined) {
+  if (!target) return false;
+  return (
+    target.calories > 0 || target.proteinG > 0 || target.fatG > 0 || target.carbsG > 0
+  );
+}
 
 export function WeeklyMealPlansPage() {
   const queryClient = useQueryClient();
@@ -49,6 +61,11 @@ export function WeeklyMealPlansPage() {
     queryFn: () => api.getFoods() as Promise<Food[]>,
   });
 
+  const weeklyTargetsQuery = useQuery({
+    queryKey: ['weekly-macro-targets'],
+    queryFn: () => api.getWeeklyMacroTargets() as Promise<WeeklyMacroTarget[]>,
+  });
+
   const foodsMap = useMemo(
     () => new Map((foodsQuery.data ?? []).map((food) => [food.id, food])),
     [foodsQuery.data],
@@ -76,6 +93,28 @@ export function WeeklyMealPlansPage() {
   }, [entriesQuery.data]);
 
   const activeMeals = mealsByDay[activeDay];
+
+  const dayTarget = weeklyTargetsQuery.data?.find((target) => target.dayOfWeek === activeDay);
+
+  const planned = useMemo(() => {
+    const entries: WeeklyMealPlanEntry[] = [];
+    for (const meal of activeMeals) {
+      entries.push(...(entriesByMealId.get(meal.id) ?? []));
+    }
+
+    return sumNutrients(
+      entries.map((entry) => {
+        const food = foodsMap.get(entry.foodId);
+        if (!food) return { calories: 0, protein: 0, fat: 0, carbs: 0 };
+        const raw = entryQuantities[entry.id] ?? String(entry.quantity);
+        const qty = Number(raw);
+        if (!Number.isFinite(qty) || qty <= 0) {
+          return { calories: 0, protein: 0, fat: 0, carbs: 0 };
+        }
+        return computeNutrients(food.nutrientsPer100g, qty);
+      }),
+    );
+  }, [activeMeals, entriesByMealId, foodsMap, entryQuantities]);
 
   useEffect(() => {
     const next: Record<string, string> = {};
@@ -271,7 +310,51 @@ export function WeeklyMealPlansPage() {
 
   return (
     <div>
-      <PageHeader title="Weekly Meal Plans" backTo="/settings" />
+      <div className="sticky top-0 z-30 bg-background shadow-[0_4px_24px_rgba(0,0,0,0.35)]">
+        <PageHeader embedded title="Weekly Meal Plans" backTo="/settings" />
+        <div className="mx-auto w-full min-w-0 max-w-lg border-b border-border px-4 py-2">
+          <div className="flex gap-1 overflow-x-auto pb-2">
+            {WEEKDAYS.map((dayName, index) => (
+              <Button
+                key={dayName}
+                type="button"
+                size="sm"
+                variant={activeDay === index ? 'default' : 'secondary'}
+                className="shrink-0"
+                onClick={() => setActiveDay(index as WeekdayIndex)}
+              >
+                {dayName.slice(0, 3)}
+              </Button>
+            ))}
+          </div>
+
+          {hasWeeklyMacroTarget(dayTarget) ? (
+            <MacroProgress
+              compact
+              label={`${WEEKDAYS[activeDay]} plan vs targets`}
+              consumed={planned}
+              target={{
+                calories: dayTarget!.calories,
+                protein: dayTarget!.proteinG,
+                fat: dayTarget!.fatG,
+                carbs: dayTarget!.carbsG,
+              }}
+            />
+          ) : (
+            <div className="space-y-1 text-xs">
+              <p className="font-semibold text-muted-foreground">Planned totals</p>
+              <p className="tabular-nums text-muted-foreground">{formatNutrientsSummary(planned)}</p>
+              <p className="text-muted-foreground">
+                No targets for {WEEKDAYS[activeDay]}.{' '}
+                <Button variant="link" className="h-auto p-0 text-xs" asChild>
+                  <Link to="/weekly-targets">Set defaults</Link>
+                </Button>
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="mx-auto w-full min-w-0 max-w-lg px-4 pb-8">
         <p className="my-4 text-sm text-muted-foreground">
           Set default meals and foods for each day of the week. Choose how many meals you eat (1–10)
@@ -283,21 +366,6 @@ export function WeeklyMealPlansPage() {
             {message}
           </p>
         )}
-
-        <div className="mb-4 flex gap-1 overflow-x-auto pb-1">
-          {WEEKDAYS.map((dayName, index) => (
-            <Button
-              key={dayName}
-              type="button"
-              size="sm"
-              variant={activeDay === index ? 'default' : 'secondary'}
-              className="shrink-0"
-              onClick={() => setActiveDay(index as WeekdayIndex)}
-            >
-              {dayName.slice(0, 3)}
-            </Button>
-          ))}
-        </div>
 
         <Card className="mb-4">
           <CardContent className="flex items-center justify-between gap-3 pt-4">

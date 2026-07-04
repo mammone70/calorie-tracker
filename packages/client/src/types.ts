@@ -153,6 +153,8 @@ export interface LocalDatabase {
 
   insertDayMeal(record: DayMealRow): Promise<void>;
   softDeleteDayMeal(id: string, deletedAt: string, updatedAt: string): Promise<void>;
+  insertMealPlanEntry(record: MealPlanEntryRow): Promise<void>;
+  softDeleteMealPlanEntry(id: string, deletedAt: string, updatedAt: string): Promise<void>;
 
   insertFood(record: FoodRow): Promise<void>;
   insertFoodLogEntry(record: FoodLogEntryRow): Promise<void>;
@@ -163,6 +165,7 @@ export interface LocalDatabase {
   getWeeklyMeals(userId: string): Promise<WeeklyMealRow[]>;
   getWeeklyMealPlanEntries(userId: string): Promise<WeeklyMealPlanEntryRow[]>;
   getDayMeals(userId: string): Promise<DayMealRow[]>;
+  getMealPlanEntries(userId: string, planDate?: string): Promise<MealPlanEntryRow[]>;
   getFoods(userId: string): Promise<FoodRow[]>;
   getFoodLogEntries(userId: string): Promise<FoodLogEntryRow[]>;
 }

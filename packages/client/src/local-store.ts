@@ -4,6 +4,7 @@ import type {
   MacroTargetInput,
   FoodLogEntryInput,
   WeeklyMacroTargetInput,
+  MealPlanEntryInput,
   WeeklyMealPlanEntryInput,
   WeeklyMealInput,
 } from '@calorie-tracker/shared';
@@ -469,6 +470,100 @@ export function createLocalStore(api: ApiClient, db: LocalDatabase, sync: SyncEn
     }
   }
 
+  async function localCreateMealPlanEntry(userId: string, input: MealPlanEntryInput) {
+    const now = new Date().toISOString();
+    const id = uuidv4();
+
+    const record = {
+      id,
+      userId,
+      planDate: input.planDate,
+      dayMealId: input.dayMealId,
+      foodId: input.foodId,
+      quantity: input.quantity,
+      unit: input.unit,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null as string | null,
+    };
+
+    await db.insertMealPlanEntry(record);
+
+    await queueMutation({
+      entityType: 'meal_plan_entries',
+      entityId: id,
+      action: 'create',
+      payload: input as unknown as Record<string, unknown>,
+      clientUpdatedAt: now,
+    });
+
+    try {
+      await runSync();
+    } catch {
+      // queued for later
+    }
+
+    return record;
+  }
+
+  async function localUpdateMealPlanEntry(
+    userId: string,
+    id: string,
+    input: Partial<MealPlanEntryInput>,
+  ) {
+    const now = new Date().toISOString();
+    const entries = await db.getMealPlanEntries(userId);
+    const existing = entries.find((entry) => entry.id === id);
+    if (!existing) throw new Error('Meal plan entry not found');
+
+    const updated = {
+      ...existing,
+      ...(input.planDate !== undefined && { planDate: input.planDate }),
+      ...(input.dayMealId !== undefined && { dayMealId: input.dayMealId }),
+      ...(input.foodId !== undefined && { foodId: input.foodId }),
+      ...(input.quantity !== undefined && { quantity: input.quantity }),
+      ...(input.unit !== undefined && { unit: input.unit }),
+      updatedAt: now,
+    };
+
+    await db.insertMealPlanEntry(updated);
+
+    await queueMutation({
+      entityType: 'meal_plan_entries',
+      entityId: id,
+      action: 'update',
+      payload: input as unknown as Record<string, unknown>,
+      clientUpdatedAt: now,
+    });
+
+    try {
+      await runSync();
+    } catch {
+      // queued for later
+    }
+
+    return updated;
+  }
+
+  async function localRemoveMealPlanEntry(userId: string, id: string) {
+    const now = new Date().toISOString();
+
+    await db.softDeleteMealPlanEntry(id, now, now);
+
+    await queueMutation({
+      entityType: 'meal_plan_entries',
+      entityId: id,
+      action: 'delete',
+      clientUpdatedAt: now,
+    });
+
+    try {
+      await runSync();
+    } catch {
+      // queued for later
+    }
+  }
+
   async function localRemoveWeeklyMealPlanEntry(userId: string, id: string) {
     const now = new Date().toISOString();
 
@@ -508,6 +603,9 @@ export function createLocalStore(api: ApiClient, db: LocalDatabase, sync: SyncEn
     localCreateWeeklyMealPlanEntry,
     localUpdateWeeklyMealPlanEntry,
     localRemoveWeeklyMealPlanEntry,
+    localCreateMealPlanEntry,
+    localUpdateMealPlanEntry,
+    localRemoveMealPlanEntry,
     localUpdateWeeklyMeal,
     localSetWeeklyMealCount,
     localCreateFood,

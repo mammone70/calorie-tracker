@@ -29,10 +29,10 @@ export function App() {
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/foods" element={<FoodsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/weekly-targets" element={<WeeklyTargetsPage />} />
+            <Route path="/weekly-meal-plans" element={<WeeklyMealPlansPage />} />
           </Route>
           <Route path="/day/:date" element={<DayDetailPage />} />
-          <Route path="/weekly-targets" element={<WeeklyTargetsPage />} />
-          <Route path="/weekly-meal-plans" element={<WeeklyMealPlansPage />} />
           <Route path="/foods/log" element={<LogFoodPage />} />
           <Route path="/foods/search" element={<FoodSearchPage />} />
           <Route path="/foods/new" element={<FoodCreatePage />} />

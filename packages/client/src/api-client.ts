@@ -165,6 +165,10 @@ export class ApiClient {
     return this.request('/meal-plans', { method: 'POST', body });
   }
 
+  updateMealPlan(id: string, body: unknown) {
+    return this.request(`/meal-plans/${id}`, { method: 'PATCH', body });
+  }
+
   deleteMealPlan(id: string) {
     return this.request(`/meal-plans/${id}`, { method: 'DELETE' });
   }

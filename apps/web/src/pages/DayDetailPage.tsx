@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MacroProgress } from '../components/MacroProgress';
 import { MacroCaloriesFeedback, MacroCaloriesInput } from '../components/MacroCaloriesFeedback';
@@ -11,13 +12,15 @@ import { DailyFoodLog, ensureWeeklyMealsForDate } from '../components/DailyFoodL
 import { PageHeader } from '../components/PageHeader';
 import { useMacroCaloriesValidation } from '../hooks/useMacroCaloriesValidation';
 import { api, localStore } from '../lib/client';
-import { cn } from '@/lib/utils';
+import { cn, selectClass } from '@/lib/utils';
 import { computeNutrients, sumNutrients } from '@calorie-tracker/client';
 import type {
   EffectiveMacroTarget,
+  EffectiveMealBlock,
   EffectiveMealPlan,
   Food,
   FoodLogEntry,
+  MealPlanFoodEntry,
   Nutrients,
 } from '@calorie-tracker/shared';
 import { WEEKDAYS, dayOfWeekFromDate, formatMealTime, formatNutrientsSummary, macroCaloriesError, roundMacroValue } from '@calorie-tracker/shared';
@@ -46,6 +49,11 @@ export function DayDetailPage() {
   const [protein, setProtein] = useState('');
   const [fat, setFat] = useState('');
   const [carbs, setCarbs] = useState('');
+  const [planFoodId, setPlanFoodId] = useState('');
+  const [planActiveMealId, setPlanActiveMealId] = useState('');
+  const [planQuantity, setPlanQuantity] = useState('100');
+  const [planEntryQuantities, setPlanEntryQuantities] = useState<Record<string, string>>({});
+  const [planSaving, setPlanSaving] = useState(false);
 
   const macroValidation = useMacroCaloriesValidation({ calories, protein, fat, carbs });
   const macroFieldsInvalid = macroValidation.show && !macroValidation.isValid;
@@ -87,6 +95,25 @@ export function DayDetailPage() {
     setCarbs(String(roundMacroValue(effective.carbsG)));
   }, [effective?.targetDate, effective?.source, effective?.calories]);
 
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const meal of planMeals) {
+      for (const entry of meal.entries) {
+        next[entry.id] = String(entry.quantity);
+      }
+    }
+    setPlanEntryQuantities(next);
+  }, [effectivePlanQuery.data]);
+
+  useEffect(() => {
+    if (!planActiveMealId && planMeals.length > 0) {
+      setPlanActiveMealId(planMeals[0].id);
+    }
+    if (planActiveMealId && !planMeals.some((meal) => meal.id === planActiveMealId)) {
+      setPlanActiveMealId(planMeals[0]?.id ?? '');
+    }
+  }, [planMeals, planActiveMealId]);
+
   const computeEntries = (entries: Array<{ foodId: string; quantity: number; unit: string }>) =>
     sumNutrients(
       entries.map((entry) => {
@@ -106,10 +133,110 @@ export function DayDetailPage() {
       await api.materializeWeeklyMealPlan(date);
       await queryClient.invalidateQueries({ queryKey: ['meal-plans-effective', date] });
       await queryClient.invalidateQueries({ queryKey: ['meal-plans', date] });
+      setTab('plan');
       setMessage('This day now has a custom meal plan you can edit');
       setMessageIsError(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to customize');
+      setMessageIsError(true);
+    }
+  };
+
+  const invalidatePlanQueries = async () => {
+    if (!date) return;
+    await queryClient.invalidateQueries({ queryKey: ['meal-plans-effective', date] });
+    await queryClient.invalidateQueries({ queryKey: ['meal-plans', date] });
+  };
+
+  const addPlanEntry = async () => {
+    if (!date || !planFoodId || !planActiveMealId) {
+      setMessage('Select a meal and food');
+      setMessageIsError(true);
+      return;
+    }
+    const qty = Number(planQuantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setMessage('Enter a valid quantity in grams');
+      setMessageIsError(true);
+      return;
+    }
+
+    setPlanSaving(true);
+    setMessage('');
+    try {
+      const userId = api.getUserId();
+      const input = {
+        planDate: date,
+        dayMealId: planActiveMealId,
+        foodId: planFoodId,
+        quantity: qty,
+        unit: 'g',
+      };
+
+      if (userId) {
+        await localStore.localCreateMealPlanEntry(userId, input);
+      } else {
+        await api.createMealPlan(input);
+      }
+
+      await invalidatePlanQueries();
+      setMessage('Added to this day\'s plan');
+      setMessageIsError(false);
+      setPlanQuantity('100');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to add');
+      setMessageIsError(true);
+    } finally {
+      setPlanSaving(false);
+    }
+  };
+
+  const removePlanEntry = async (id: string) => {
+    setMessage('');
+    try {
+      const userId = api.getUserId();
+      if (userId) {
+        await localStore.localRemoveMealPlanEntry(userId, id);
+      } else {
+        await api.deleteMealPlan(id);
+      }
+      await invalidatePlanQueries();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to remove');
+      setMessageIsError(true);
+    }
+  };
+
+  const updatePlanEntryQuantity = async (entry: MealPlanFoodEntry, meal: EffectiveMealBlock) => {
+    if (planSource !== 'override' || !date) return;
+    const raw = planEntryQuantities[entry.id];
+    const qty = Number(raw);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setMessage('Enter a valid quantity in grams');
+      setMessageIsError(true);
+      return;
+    }
+    if (qty === entry.quantity) return;
+
+    setMessage('');
+    try {
+      const userId = api.getUserId();
+      const input = {
+        planDate: date,
+        dayMealId: meal.id,
+        foodId: entry.foodId,
+        quantity: qty,
+        unit: entry.unit,
+      };
+
+      if (userId) {
+        await localStore.localUpdateMealPlanEntry(userId, entry.id, input);
+      } else {
+        await api.updateMealPlan(entry.id, { quantity: qty });
+      }
+      await invalidatePlanQueries();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to update quantity');
       setMessageIsError(true);
     }
   };
@@ -334,6 +461,46 @@ export function DayDetailPage() {
                 <CardContent>
                   {meal.entries.length === 0 ? (
                     <p className="text-sm italic text-muted-foreground">No foods planned</p>
+                  ) : planSource === 'override' ? (
+                    <ul className="space-y-2">
+                      {meal.entries.map((entry) => {
+                        const food = foodsMap.get(entry.foodId);
+                        return (
+                          <li
+                            key={entry.id}
+                            className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium">{food?.name ?? 'Unknown food'}</p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <Input
+                                className="mb-0 w-20 text-right"
+                                inputMode="decimal"
+                                aria-label={`Quantity for ${food?.name ?? 'food'}`}
+                                value={planEntryQuantities[entry.id] ?? String(entry.quantity)}
+                                onChange={(e) =>
+                                  setPlanEntryQuantities((prev) => ({
+                                    ...prev,
+                                    [entry.id]: e.target.value,
+                                  }))
+                                }
+                                onBlur={() => void updatePlanEntryQuantity(entry, meal)}
+                              />
+                              <span className="text-sm text-muted-foreground">{entry.unit}</span>
+                              <Button
+                                type="button"
+                                variant="link"
+                                className="h-auto p-0 text-destructive"
+                                onClick={() => void removePlanEntry(entry.id)}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
                   ) : (
                     meal.entries.map((entry) => {
                       const food = foodsMap.get(entry.foodId);
@@ -351,6 +518,16 @@ export function DayDetailPage() {
                       );
                     })
                   )}
+                  {planSource === 'override' && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="mt-2 h-auto p-0"
+                      onClick={() => setPlanActiveMealId(meal.id)}
+                    >
+                      Add food to this meal
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -358,6 +535,57 @@ export function DayDetailPage() {
               <p className="italic text-muted-foreground">
                 No meal plan for this day. Set up weekly templates in Settings.
               </p>
+            )}
+            {planSource === 'override' && planMeals.length > 0 && (
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle className="text-base">
+                    Add food to{' '}
+                    {planMeals.find((meal) => meal.id === planActiveMealId)?.name ?? 'selected meal'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <select
+                    className={selectClass}
+                    value={planActiveMealId}
+                    onChange={(e) => setPlanActiveMealId(e.target.value)}
+                  >
+                    {planMeals.map((meal) => (
+                      <option key={meal.id} value={meal.id}>
+                        {meal.name}
+                        {formatMealTime(meal.mealTime) ? ` (${formatMealTime(meal.mealTime)})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className={selectClass}
+                    value={planFoodId}
+                    onChange={(e) => setPlanFoodId(e.target.value)}
+                  >
+                    <option value="">Select food…</option>
+                    {(foodsQuery.data ?? []).map((food) => (
+                      <option key={food.id} value={food.id}>
+                        {food.brand ? `${food.brand} - ` : ''}
+                        {food.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Input
+                    placeholder="Quantity (g)"
+                    inputMode="decimal"
+                    value={planQuantity}
+                    onChange={(e) => setPlanQuantity(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    className="w-full"
+                    onClick={() => void addPlanEntry()}
+                    disabled={planSaving}
+                  >
+                    {planSaving ? 'Adding…' : 'Add to plan'}
+                  </Button>
+                </CardContent>
+              </Card>
             )}
             {planSource === 'weekly' && planMeals.length > 0 && (
               <Button type="button" className="mt-3 w-full" size="lg" onClick={customizeDayPlan}>
