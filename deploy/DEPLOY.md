@@ -197,6 +197,10 @@ Paste values from `deploy/.env.production.example` and fill in secrets (`openssl
 | `SSH_PRIVATE_KEY` | Private key for deploy user (PEM contents) |
 | `PRODUCTION_API_URL` | `https://mammonesoftware.org/api` |
 
+`VPS_HOST` must be the server IP or hostname only (not a URL). `SSH_PRIVATE_KEY` must be the full private key PEM, including `-----BEGIN ... KEY-----` lines.
+
+If you restricted SSH with UFW to a single IP, GitHub Actions cannot connect. Either keep `ufw allow OpenSSH` for port 22, or allow [GitHub Actions IP ranges](https://api.github.com/meta) (they change over time).
+
 The workflow (`.github/workflows/deploy-production.yml`) builds the web app, rsyncs to the VPS, rebuilds the API image, runs migrations, restarts services, and reloads nginx.
 
 ### Rollback

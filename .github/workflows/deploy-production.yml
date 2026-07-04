@@ -56,11 +56,35 @@ jobs:
           }
 
       - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
         run: |
+          set -euo pipefail
+          if [ -z "${SSH_PRIVATE_KEY:-}" ]; then
+            echo "ERROR: SSH_PRIVATE_KEY secret is empty"
+            exit 1
+          fi
+          if [ -z "${VPS_HOST:-}" ]; then
+            echo "ERROR: VPS_HOST secret is empty"
+            exit 1
+          fi
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+          if ! ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null 2>&1; then
+            echo "ERROR: SSH_PRIVATE_KEY is not a valid private key"
+            echo "Paste the full PEM file, including BEGIN/END lines, into the GitHub secret."
+            exit 1
+          fi
+          if ! ssh-keyscan -T 15 -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>ssh-keyscan.err; then
+            echo "ERROR: Could not fetch SSH host key for $VPS_HOST"
+            cat ssh-keyscan.err
+            echo "Check VPS_HOST (hostname or IP only, no https:// prefix)."
+            echo "Port 22 must be reachable from GitHub Actions — not restricted to your home IP only."
+            exit 1
+          fi
 
       - name: Sync files to VPS
         env:
