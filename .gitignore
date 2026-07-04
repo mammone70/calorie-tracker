@@ -7,6 +7,8 @@ build
 .env
 .env.local
 .env.*.local
+user-export-*.json
+*-export.json
 coverage
 .DS_Store
 *.tsbuildinfo

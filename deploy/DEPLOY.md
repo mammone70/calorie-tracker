@@ -183,6 +183,39 @@ Alternatively, temporarily set `ALLOW_REGISTRATION=true` in `.env`, restart the 
 docker compose -f docker-compose.prod.yml up -d api
 ```
 
+### Port user data from dev to production
+
+Export on your dev machine (local Postgres running, same schema):
+
+```bash
+pnpm --filter @calorie-tracker/db export:user mammone@gmail.com mammone-export.json
+```
+
+Create the same user on production if needed (password can differ from dev):
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm --entrypoint node api \
+  packages/db/scripts/create-user.js mammone@gmail.com 'your-production-password'
+```
+
+Copy the export file to the VPS:
+
+```bash
+scp mammone-export.json deploy@YOUR_VPS:/opt/calorie-tracker/
+```
+
+Import on the VPS (`--replace` clears existing data for that user first):
+
+```bash
+cd /opt/calorie-tracker
+docker compose -f docker-compose.prod.yml run --rm --entrypoint node api \
+  packages/db/scripts/import-user-data.js mammone-export.json mammone@gmail.com --replace
+```
+
+This copies foods, weekly/daily meal plans, macro targets, and food logs. It does **not** copy passwords or refresh tokens.
+
+**Do not commit export JSON files** — they contain your personal data.
+
 ## 5. GitHub Actions automated deploy
 
 Deploys run when you push a version tag (e.g. `v0.1.0`):
