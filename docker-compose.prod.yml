@@ -45,18 +45,18 @@ services:
       - internal
 
   migrate:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    image: postgres:16-alpine
     env_file: .env
     environment:
-      NODE_ENV: production
-      NODE_PATH: /app/node_modules
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MIGRATIONS_DIR: /migrations
+    volumes:
+      - ./packages/db/drizzle:/migrations:ro
+      - ./deploy/scripts/migrate-db.sh:/migrate-db.sh:ro
     depends_on:
       postgres:
         condition: service_healthy
-    command: ['node', 'packages/db/scripts/migrate.js']
+    command: ['sh', '/migrate-db.sh']
     profiles:
       - migrate
     networks:
