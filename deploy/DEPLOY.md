@@ -7,7 +7,7 @@ Deploy the Calorie Tracker API (NestJS) and web PWA (static Vite build) to a sin
 | Component | Role |
 |-----------|------|
 | **Host nginx** | HTTPS, serves `apps/web/dist`, proxies `/api/*` to API on localhost |
-| **API** | NestJS on `127.0.0.1:3000` (not exposed publicly) |
+| **API** | NestJS published on host `127.0.0.1:3001` (container port 3000, not exposed publicly) |
 | **Postgres** | Database (internal network only, not exposed publicly) |
 
 Future mobile apps connect to the same HTTPS API URL (`https://mammonesoftware.org/api`) — no CORS changes needed for native clients.
@@ -62,7 +62,7 @@ sudo ufw delete allow OpenSSH
 sudo ufw allow from YOUR.IP.ADDRESS to any port 22
 ```
 
-**Do not** open extra ports for Docker — the API binds to `127.0.0.1:3000` only.
+**Do not** open extra ports for Docker — the API binds to `127.0.0.1:3001` only.
 
 ### SSH hardening
 
@@ -235,7 +235,7 @@ sudo systemctl enable --now calorie-tracker-backup.timer
 | Control | Status |
 |---------|--------|
 | HTTPS (Let's Encrypt via certbot + nginx) | Yes |
-| API bound to localhost only | `127.0.0.1:3000` |
+| API bound to localhost only | `127.0.0.1:3001` |
 | Postgres not publicly exposed | Docker internal network |
 | JWT auth on all data routes | Yes |
 | bcrypt password hashing (cost 12) | Yes |
