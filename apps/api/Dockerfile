@@ -46,7 +46,9 @@ COPY --from=builder /app/apps/api/dist ./apps/api/dist
 
 # Hoisted install so scripts like packages/db/scripts/migrate.js can require('postgres').
 RUN echo "node-linker=hoisted" > .npmrc \
-  && pnpm install --frozen-lockfile --prod --filter @calorie-tracker/api... \
+  && pnpm install --frozen-lockfile --prod --filter @calorie-tracker/api... --filter @calorie-tracker/db... \
+  && npm install --omit=dev --no-save postgres@3.4.5 \
+  && node -e "require.resolve('postgres'); require.resolve('@nestjs/core'); require.resolve('@calorie-tracker/db')" \
   && chown -R app:app /app
 
 USER app
