@@ -42,19 +42,18 @@ jobs:
         run: |
           mkdir -p deploy-bundle/apps/web deploy-bundle/apps/api deploy-bundle/packages
           cp -r apps/web/dist deploy-bundle/apps/web/
-          cp docker-compose.prod.yml deploy-bundle/
-          cp .dockerignore deploy-bundle/
+          cp docker-compose.prod.yml .dockerignore deploy-bundle/
           cp -r deploy deploy-bundle/
           cp pnpm-lock.yaml pnpm-workspace.yaml package.json deploy-bundle/
-          cp -r packages/shared deploy-bundle/packages/shared
-          cp -r packages/db deploy-bundle/packages/db
-          cp -r apps/api deploy-bundle/apps/api
-          test -f deploy-bundle/apps/api/Dockerfile
-          test -f deploy-bundle/docker-compose.prod.yml
-          # Remove dev artifacts from bundle
-          find deploy-bundle -name node_modules -prune -exec rm -rf {} + 2>/dev/null || true
-          find deploy-bundle -name dist -type d -not -path '*/apps/web/dist*' -prune -exec rm -rf {} + 2>/dev/null || true
-          test -f deploy-bundle/apps/api/Dockerfile
+          rsync -a --exclude node_modules --exclude dist packages/shared/ deploy-bundle/packages/shared/
+          rsync -a --exclude node_modules --exclude dist packages/db/ deploy-bundle/packages/db/
+          rsync -a --exclude node_modules --exclude dist apps/api/ deploy-bundle/apps/api/
+          test -f deploy-bundle/apps/api/Dockerfile || {
+            echo 'ERROR: apps/api/Dockerfile missing from deploy bundle'
+            ls -la apps/api || true
+            ls -la deploy-bundle/apps/api || true
+            exit 1
+          }
 
       - name: Configure SSH
         run: |
