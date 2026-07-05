@@ -6,11 +6,12 @@ Deploy the Calorie Tracker API (NestJS) and web PWA (static Vite build) to a sin
 
 | Component | Role |
 |-----------|------|
-| **Host nginx** | HTTPS, serves `apps/web/dist`, proxies `/api/*` to API on localhost |
-| **API** | NestJS published on host `127.0.0.1:3001` (container port 3000, not exposed publicly) |
+| **Host nginx** | HTTPS for web + API subdomains; serves `apps/web/dist`, proxies API subdomain to localhost |
+| **Web** | `https://cal-count.mammonesoftware.org` |
+| **API** | `https://api.cal-count.mammonesoftware.org/api` (NestJS on host `127.0.0.1:3001`) |
 | **Postgres** | Database (internal network only, not exposed publicly) |
 
-Future mobile apps connect to the same HTTPS API URL (`https://mammonesoftware.org/api`) — no CORS changes needed for native clients.
+Future mobile apps connect to the same HTTPS API URL (`https://api.cal-count.mammonesoftware.org/api`) — no CORS changes needed for native clients.
 
 ## Prerequisites
 
@@ -99,6 +100,15 @@ sudo mkdir -p /opt/calorie-tracker/backups
 sudo chown deploy:deploy /opt/calorie-tracker
 ```
 
+### DNS
+
+Create A records pointing at your VPS IP:
+
+| Host | Points to |
+|------|-----------|
+| `cal-count.mammonesoftware.org` | VPS IP |
+| `api.cal-count.mammonesoftware.org` | VPS IP |
+
 ### nginx site config
 
 After the first code sync to `/opt/calorie-tracker`:
@@ -109,12 +119,10 @@ sudo cp /opt/calorie-tracker/deploy/nginx/calorie-tracker.conf \
 sudo ln -sf /etc/nginx/sites-available/calorie-tracker /etc/nginx/sites-enabled/
 ```
 
-If nginx already has a server block for `mammonesoftware.org`, merge the `/api/` proxy and SPA `try_files` from `deploy/nginx/calorie-tracker.conf` into that existing block instead of enabling a conflicting `server_name`.
-
-TLS (skip if cert already exists for this domain):
+TLS:
 
 ```bash
-sudo certbot --nginx -d mammonesoftware.org
+sudo certbot --nginx -d cal-count.mammonesoftware.org -d api.cal-count.mammonesoftware.org
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
@@ -134,7 +142,7 @@ Required values:
 | `POSTGRES_PASSWORD` | `openssl rand -hex 32` |
 | `JWT_ACCESS_SECRET` | `openssl rand -hex 32` |
 | `JWT_REFRESH_SECRET` | `openssl rand -hex 32` |
-| `WEB_ORIGIN` | `https://mammonesoftware.org` |
+| `WEB_ORIGIN` | `https://cal-count.mammonesoftware.org` |
 | `ALLOW_REGISTRATION` | `false` |
 
 **Never commit `.env` to git.**
@@ -145,7 +153,7 @@ Before CI is wired up, deploy once by hand:
 
 ```bash
 # On your dev machine — build web with production API URL
-VITE_API_URL=https://mammonesoftware.org/api pnpm install
+VITE_API_URL=https://api.cal-count.mammonesoftware.org/api pnpm install
 pnpm build:packages
 pnpm --filter @calorie-tracker/web build
 
@@ -164,7 +172,8 @@ sudo nginx -t && sudo systemctl reload nginx
 Verify:
 
 ```bash
-curl -s https://mammonesoftware.org/api/health
+curl -s https://api.cal-count.mammonesoftware.org/api/health
+curl -I https://cal-count.mammonesoftware.org
 ```
 
 ## 4. Create the first user (invite-only)
@@ -204,13 +213,17 @@ Copy the export file to the VPS:
 scp mammone-export.json deploy@YOUR_VPS:/opt/calorie-tracker/
 ```
 
-Import on the VPS (`--replace` clears existing data for that user first):
+Import on the VPS (`--replace` clears existing data for that user first). Mount the export file into the container:
 
 ```bash
 cd /opt/calorie-tracker
-docker compose -f docker-compose.prod.yml run --rm --entrypoint node api \
+docker compose -f docker-compose.prod.yml run --rm \
+  -v /opt/calorie-tracker/mammone-export.json:/app/mammone-export.json:ro \
+  --entrypoint node api \
   packages/db/scripts/import-user-data.js mammone-export.json mammone@gmail.com --replace
 ```
+
+Confirm the file exists on the host first: `ls -la /opt/calorie-tracker/mammone-export.json`
 
 This copies foods, weekly/daily meal plans, macro targets, and food logs. It does **not** copy passwords or refresh tokens.
 
@@ -246,7 +259,7 @@ Paste values from `deploy/.env.production.example` and fill in secrets (`openssl
 | `VPS_HOST` | VPS IP or hostname |
 | `VPS_USER` | `deploy` |
 | `SSH_PRIVATE_KEY` | Private key for deploy user (PEM contents) |
-| `PRODUCTION_API_URL` | `https://mammonesoftware.org/api` |
+| `PRODUCTION_API_URL` | `https://api.cal-count.mammonesoftware.org/api` |
 
 `VPS_HOST` must be the server IP or hostname only (not a URL). `SSH_PRIVATE_KEY` must be the full private key PEM, including `-----BEGIN ... KEY-----` lines.
 
@@ -321,7 +334,7 @@ Point the Expo app at your production API:
 
 ```json
 "extra": {
-  "apiUrl": "https://mammonesoftware.org/api"
+  "apiUrl": "https://api.cal-count.mammonesoftware.org/api"
 }
 ```
 

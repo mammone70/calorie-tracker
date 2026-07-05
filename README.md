@@ -82,7 +82,7 @@ See [deploy/DEPLOY.md](deploy/DEPLOY.md) for full VPS deployment instructions.
 
 ```bash
 pnpm build:packages
-VITE_API_URL=https://mammonesoftware.org/api pnpm --filter @calorie-tracker/web build
+VITE_API_URL=https://api.cal-count.mammonesoftware.org/api pnpm --filter @calorie-tracker/web build
 # Static output in apps/web/dist — served by host nginx in production
 # Set WEB_ORIGIN and ALLOW_REGISTRATION=false on the API for production
 ```
