@@ -116,7 +116,13 @@ export interface TokenStorage {
   getAccessToken(): Promise<string | null>;
   getRefreshToken(): Promise<string | null>;
   getUserId(): Promise<string | null>;
-  setTokens(accessToken: string, refreshToken: string, userId?: string): Promise<void>;
+  getUserRole(): Promise<'client' | 'admin' | null>;
+  getUserEmail(): Promise<string | null>;
+  setTokens(
+    accessToken: string,
+    refreshToken: string,
+    user?: { id: string; role?: 'client' | 'admin'; email?: string },
+  ): Promise<void>;
   clearTokens(): Promise<void>;
 }
 

@@ -2,6 +2,7 @@ export * from './constants';
 export * from './macro-calories';
 export * from './macro-target-utils';
 export * from './schemas/auth';
+export * from './schemas/acting-user';
 export * from './schemas/food';
 export * from './schemas/macro-target';
 export * from './schemas/weekly-macro-target';

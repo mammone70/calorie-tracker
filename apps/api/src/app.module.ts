@@ -8,6 +8,7 @@ import { FoodsModule } from './foods/foods.module';
 import { MealPlansModule } from './meal-plans/meal-plans.module';
 import { FoodLogsModule } from './food-logs/food-logs.module';
 import { SyncModule } from './sync/sync.module';
+import { AdminModule } from './admin/admin.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -26,6 +27,7 @@ import { HealthController } from './health.controller';
     MealPlansModule,
     FoodLogsModule,
     SyncModule,
+    AdminModule,
   ],
   controllers: [HealthController],
 })

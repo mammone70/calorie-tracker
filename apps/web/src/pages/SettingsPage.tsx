@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -14,10 +15,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { COLOR_THEME_OPTIONS, useTheme, type ColorTheme } from '../contexts/ThemeContext';
 
 export function SettingsPage() {
-  const { logout, sync } = useAuth();
+  const { logout, sync, isAdmin, changePassword } = useAuth();
   const { colorTheme, setColorTheme } = useTheme();
   const navigate = useNavigate();
   const [message, setMessage] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const handleSync = async () => {
     setMessage('');
@@ -32,6 +37,29 @@ export function SettingsPage() {
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 8) {
+      setMessage('New password must be at least 8 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setMessage('New passwords do not match');
+      return;
+    }
+
+    setChangingPassword(true);
+    setMessage('');
+    try {
+      await changePassword(currentPassword, newPassword);
+      navigate('/login');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to change password');
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   return (
@@ -62,6 +90,52 @@ export function SettingsPage() {
           </Select>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Change password</CardTitle>
+          <CardDescription>Update your account password</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleChangePassword} className="space-y-3">
+            <Input
+              type="password"
+              placeholder="Current password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+            />
+            <Input
+              type="password"
+              placeholder="New password (min 8 characters)"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+            <Input
+              type="password"
+              placeholder="Confirm new password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+            <Button type="submit" className="w-full" disabled={changingPassword}>
+              {changingPassword ? 'Updating…' : 'Update password'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {isAdmin && (
+        <Link to="/admin" className="block">
+          <Card>
+            <CardHeader>
+              <CardTitle>Admin dashboard</CardTitle>
+              <CardDescription>Manage clients, invites, macros, and meal plans</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+      )}
 
       <Link to="/weekly-meal-plans" className="block">
         <Card>

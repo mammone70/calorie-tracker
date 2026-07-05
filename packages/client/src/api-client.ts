@@ -1,4 +1,5 @@
 import type { TokenStorage } from './types';
+import type { AdminUser, CreateInvitationResponse, Invitation, User, UserRole } from '@calorie-tracker/shared';
 
 type RequestOptions = {
   method?: string;
@@ -6,10 +7,22 @@ type RequestOptions = {
   auth?: boolean;
 };
 
+type ForUserOptions = {
+  forUserId?: string;
+};
+
+function withForUserId(path: string, forUserId?: string) {
+  if (!forUserId) return path;
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}forUserId=${encodeURIComponent(forUserId)}`;
+}
+
 export class ApiClient {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
   private userId: string | null = null;
+  private userRole: UserRole | null = null;
+  private userEmail: string | null = null;
 
   constructor(
     private readonly tokenStorage: TokenStorage,
@@ -20,23 +33,45 @@ export class ApiClient {
     this.accessToken = await this.tokenStorage.getAccessToken();
     this.refreshToken = await this.tokenStorage.getRefreshToken();
     this.userId = await this.tokenStorage.getUserId();
+    this.userRole = await this.tokenStorage.getUserRole();
+    this.userEmail = await this.tokenStorage.getUserEmail();
   }
 
   getUserId() {
     return this.userId;
   }
 
-  async setTokens(accessToken: string, refreshToken: string, userId?: string) {
+  getUserRole() {
+    return this.userRole;
+  }
+
+  getUserEmail() {
+    return this.userEmail;
+  }
+
+  isAdmin() {
+    return this.userRole === 'admin';
+  }
+
+  async setTokens(
+    accessToken: string,
+    refreshToken: string,
+    user?: { id: string; role?: UserRole; email?: string },
+  ) {
     this.accessToken = accessToken;
     this.refreshToken = refreshToken;
-    if (userId) this.userId = userId;
-    await this.tokenStorage.setTokens(accessToken, refreshToken, userId);
+    if (user?.id) this.userId = user.id;
+    if (user?.role) this.userRole = user.role;
+    if (user?.email) this.userEmail = user.email;
+    await this.tokenStorage.setTokens(accessToken, refreshToken, user);
   }
 
   async clearTokens() {
     this.accessToken = null;
     this.refreshToken = null;
     this.userId = null;
+    this.userRole = null;
+    this.userEmail = null;
     await this.tokenStorage.clearTokens();
   }
 
@@ -93,48 +128,95 @@ export class ApiClient {
     }
   }
 
-  register(email: string, password: string) {
+  getMe() {
+    return this.request<User>('/auth/me');
+  }
+
+  changePassword(currentPassword: string, newPassword: string) {
+    return this.request<{ ok: true }>('/auth/change-password', {
+      method: 'POST',
+      body: { currentPassword, newPassword },
+    });
+  }
+
+  previewInvite(token: string) {
+    return this.request<{ email: string; expiresAt: string }>(
+      `/auth/invites/${encodeURIComponent(token)}/preview`,
+      { auth: false },
+    );
+  }
+
+  register(email: string, password: string, inviteToken?: string) {
     return this.request<{
-      user: { id: string; email: string };
+      user: User;
       accessToken: string;
       refreshToken: string;
-    }>('/auth/register', { method: 'POST', body: { email, password }, auth: false });
+    }>('/auth/register', {
+      method: 'POST',
+      body: { email, password, inviteToken },
+      auth: false,
+    });
   }
 
   login(email: string, password: string) {
     return this.request<{
-      user: { id: string; email: string };
+      user: User;
       accessToken: string;
       refreshToken: string;
     }>('/auth/login', { method: 'POST', body: { email, password }, auth: false });
   }
 
-  getMacroTargets(from: string, to: string) {
-    return this.request(`/macro-targets?from=${from}&to=${to}`);
+  listUsers() {
+    return this.request<AdminUser[]>('/admin/users');
   }
 
-  getEffectiveMacroTargets(from: string, to: string) {
-    return this.request(`/macro-targets/effective?from=${from}&to=${to}`);
+  createInvitation(email: string) {
+    return this.request<CreateInvitationResponse>('/admin/invitations', {
+      method: 'POST',
+      body: { email },
+    });
   }
 
-  upsertMacroTarget(body: unknown) {
-    return this.request('/macro-targets', { method: 'PUT', body });
+  listInvitations() {
+    return this.request<Invitation[]>('/admin/invitations');
   }
 
-  deleteMacroTarget(id: string) {
-    return this.request(`/macro-targets/${id}`, { method: 'DELETE' });
+  getMacroTargets(from: string, to: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/macro-targets?from=${from}&to=${to}`, options.forUserId));
   }
 
-  getWeeklyMacroTargets() {
-    return this.request('/weekly-macro-targets');
+  getEffectiveMacroTargets(from: string, to: string, options: ForUserOptions = {}) {
+    return this.request(
+      withForUserId(`/macro-targets/effective?from=${from}&to=${to}`, options.forUserId),
+    );
   }
 
-  upsertWeeklyMacroTarget(body: unknown) {
-    return this.request('/weekly-macro-targets', { method: 'PUT', body });
+  upsertMacroTarget(body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/macro-targets', options.forUserId), {
+      method: 'PUT',
+      body,
+    });
   }
 
-  getFoods() {
-    return this.request('/foods');
+  deleteMacroTarget(id: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/macro-targets/${id}`, options.forUserId), {
+      method: 'DELETE',
+    });
+  }
+
+  getWeeklyMacroTargets(options: ForUserOptions = {}) {
+    return this.request(withForUserId('/weekly-macro-targets', options.forUserId));
+  }
+
+  upsertWeeklyMacroTarget(body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/weekly-macro-targets', options.forUserId), {
+      method: 'PUT',
+      body,
+    });
+  }
+
+  getFoods(options: ForUserOptions = {}) {
+    return this.request(withForUserId('/foods', options.forUserId));
   }
 
   searchFoods(q: string) {
@@ -145,62 +227,92 @@ export class ApiClient {
     return this.request('/foods', { method: 'POST', body });
   }
 
-  getMealPlans(date: string) {
-    return this.request(`/meal-plans?date=${date}`);
+  getMealPlans(date: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/meal-plans?date=${date}`, options.forUserId));
   }
 
-  getEffectiveMealPlans(date: string) {
-    return this.request(`/meal-plans/effective?date=${date}`);
+  getEffectiveMealPlans(date: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/meal-plans/effective?date=${date}`, options.forUserId));
   }
 
-  materializeWeeklyMealPlan(date: string) {
-    return this.request('/meal-plans/materialize-weekly', { method: 'POST', body: { date } });
+  materializeWeeklyMealPlan(date: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/meal-plans/materialize-weekly', options.forUserId), {
+      method: 'POST',
+      body: { date },
+    });
   }
 
-  resetMealPlanToWeekly(date: string) {
-    return this.request('/meal-plans/reset-to-weekly', { method: 'POST', body: { date } });
+  resetMealPlanToWeekly(date: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/meal-plans/reset-to-weekly', options.forUserId), {
+      method: 'POST',
+      body: { date },
+    });
   }
 
-  createMealPlan(body: unknown) {
-    return this.request('/meal-plans', { method: 'POST', body });
+  createMealPlan(body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/meal-plans', options.forUserId), {
+      method: 'POST',
+      body,
+    });
   }
 
-  updateMealPlan(id: string, body: unknown) {
-    return this.request(`/meal-plans/${id}`, { method: 'PATCH', body });
+  updateMealPlan(id: string, body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/meal-plans/${id}`, options.forUserId), {
+      method: 'PATCH',
+      body,
+    });
   }
 
-  deleteMealPlan(id: string) {
-    return this.request(`/meal-plans/${id}`, { method: 'DELETE' });
+  deleteMealPlan(id: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/meal-plans/${id}`, options.forUserId), {
+      method: 'DELETE',
+    });
   }
 
-  getWeeklyMeals(dayOfWeek?: number) {
-    const query = dayOfWeek !== undefined ? `?dayOfWeek=${dayOfWeek}` : '';
-    return this.request(`/weekly-meals${query}`);
+  getWeeklyMeals(dayOfWeek?: number, options: ForUserOptions = {}) {
+    const base =
+      dayOfWeek !== undefined ? `/weekly-meals?dayOfWeek=${dayOfWeek}` : '/weekly-meals';
+    return this.request(withForUserId(base, options.forUserId));
   }
 
-  setWeeklyMealCount(body: unknown) {
-    return this.request('/weekly-meals/set-count', { method: 'POST', body });
+  setWeeklyMealCount(body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/weekly-meals/set-count', options.forUserId), {
+      method: 'POST',
+      body,
+    });
   }
 
-  updateWeeklyMeal(id: string, body: unknown) {
-    return this.request(`/weekly-meals/${id}`, { method: 'PATCH', body });
+  updateWeeklyMeal(id: string, body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/weekly-meals/${id}`, options.forUserId), {
+      method: 'PATCH',
+      body,
+    });
   }
 
-  getWeeklyMealPlans(dayOfWeek?: number) {
-    const query = dayOfWeek !== undefined ? `?dayOfWeek=${dayOfWeek}` : '';
-    return this.request(`/weekly-meal-plans${query}`);
+  getWeeklyMealPlans(dayOfWeek?: number, options: ForUserOptions = {}) {
+    const base =
+      dayOfWeek !== undefined ? `/weekly-meal-plans?dayOfWeek=${dayOfWeek}` : '/weekly-meal-plans';
+    return this.request(withForUserId(base, options.forUserId));
   }
 
-  createWeeklyMealPlan(body: unknown) {
-    return this.request('/weekly-meal-plans', { method: 'POST', body });
+  createWeeklyMealPlan(body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/weekly-meal-plans', options.forUserId), {
+      method: 'POST',
+      body,
+    });
   }
 
-  updateWeeklyMealPlan(id: string, body: unknown) {
-    return this.request(`/weekly-meal-plans/${id}`, { method: 'PATCH', body });
+  updateWeeklyMealPlan(id: string, body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/weekly-meal-plans/${id}`, options.forUserId), {
+      method: 'PATCH',
+      body,
+    });
   }
 
-  deleteWeeklyMealPlan(id: string) {
-    return this.request(`/weekly-meal-plans/${id}`, { method: 'DELETE' });
+  deleteWeeklyMealPlan(id: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/weekly-meal-plans/${id}`, options.forUserId), {
+      method: 'DELETE',
+    });
   }
 
   getFoodLogs(date: string) {

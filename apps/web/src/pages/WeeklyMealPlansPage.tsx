@@ -33,7 +33,25 @@ function hasWeeklyMacroTarget(target: WeeklyMacroTarget | undefined) {
   );
 }
 
-export function WeeklyMealPlansPage() {
+type WeeklyMealPlansPageProps = {
+  forUserId?: string;
+  backTo?: string;
+  title?: string;
+  targetsLink?: string;
+};
+
+export function WeeklyMealPlansPage({
+  forUserId,
+  backTo = '/settings',
+  title = 'Weekly Meal Plans',
+  targetsLink = '/weekly-targets',
+}: WeeklyMealPlansPageProps = {}) {
+  const adminMode = !!forUserId;
+  const mealsQueryKey = ['weekly-meals', forUserId ?? 'self'];
+  const entriesQueryKey = ['weekly-meal-plans', forUserId ?? 'self'];
+  const foodsQueryKey = ['foods', forUserId ?? 'self'];
+  const targetsQueryKey = ['weekly-macro-targets', forUserId ?? 'self'];
+
   const queryClient = useQueryClient();
   const [activeDay, setActiveDay] = useState<WeekdayIndex>(0);
   const [foodId, setFoodId] = useState('');
@@ -47,23 +65,23 @@ export function WeeklyMealPlansPage() {
   const [initializedDays, setInitializedDays] = useState<Set<number>>(new Set());
 
   const mealsQuery = useQuery({
-    queryKey: ['weekly-meals'],
-    queryFn: () => api.getWeeklyMeals() as Promise<WeeklyMeal[]>,
+    queryKey: mealsQueryKey,
+    queryFn: () => api.getWeeklyMeals(undefined, { forUserId }) as Promise<WeeklyMeal[]>,
   });
 
   const entriesQuery = useQuery({
-    queryKey: ['weekly-meal-plans'],
-    queryFn: () => api.getWeeklyMealPlans() as Promise<WeeklyMealPlanEntry[]>,
+    queryKey: entriesQueryKey,
+    queryFn: () => api.getWeeklyMealPlans(undefined, { forUserId }) as Promise<WeeklyMealPlanEntry[]>,
   });
 
   const foodsQuery = useQuery({
-    queryKey: ['foods'],
-    queryFn: () => api.getFoods() as Promise<Food[]>,
+    queryKey: foodsQueryKey,
+    queryFn: () => api.getFoods({ forUserId }) as Promise<Food[]>,
   });
 
   const weeklyTargetsQuery = useQuery({
-    queryKey: ['weekly-macro-targets'],
-    queryFn: () => api.getWeeklyMacroTargets() as Promise<WeeklyMacroTarget[]>,
+    queryKey: targetsQueryKey,
+    queryFn: () => api.getWeeklyMacroTargets({ forUserId }) as Promise<WeeklyMacroTarget[]>,
   });
 
   const foodsMap = useMemo(
@@ -166,9 +184,10 @@ export function WeeklyMealPlansPage() {
 
   const setMealCount = async (dayOfWeek: WeekdayIndex, mealCount: number) => {
     const userId = api.getUserId();
+    const useLocalStore = !adminMode && !!userId;
     const current = mealsByDay[dayOfWeek];
 
-    if (userId) {
+    if (useLocalStore) {
       const createdMeals =
         mealCount > current.length
           ? Array.from({ length: mealCount - current.length }, (_, offset) => ({
@@ -180,11 +199,11 @@ export function WeeklyMealPlansPage() {
 
       await localStore.localSetWeeklyMealCount(userId, dayOfWeek, mealCount, createdMeals);
     } else {
-      await api.setWeeklyMealCount({ dayOfWeek, mealCount });
+      await api.setWeeklyMealCount({ dayOfWeek, mealCount }, { forUserId });
     }
 
-    await queryClient.invalidateQueries({ queryKey: ['weekly-meals'] });
-    await queryClient.invalidateQueries({ queryKey: ['weekly-meal-plans'] });
+    await queryClient.invalidateQueries({ queryKey: mealsQueryKey });
+    await queryClient.invalidateQueries({ queryKey: entriesQueryKey });
     await queryClient.invalidateQueries({ queryKey: ['meal-plans-effective'] });
   };
 
@@ -195,7 +214,8 @@ export function WeeklyMealPlansPage() {
     setMessage('');
     try {
       const userId = api.getUserId();
-      if (userId) {
+      const useLocalStore = !adminMode && !!userId;
+      if (useLocalStore) {
         await localStore.localUpdateWeeklyMeal(userId, meal.id, {
           dayOfWeek: meal.dayOfWeek as WeekdayIndex,
           mealIndex: meal.mealIndex,
@@ -203,9 +223,9 @@ export function WeeklyMealPlansPage() {
           mealTime: updates.mealTime !== undefined ? updates.mealTime : meal.mealTime,
         });
       } else {
-        await api.updateWeeklyMeal(meal.id, updates);
+        await api.updateWeeklyMeal(meal.id, updates, { forUserId });
       }
-      await queryClient.invalidateQueries({ queryKey: ['weekly-meals'] });
+      await queryClient.invalidateQueries({ queryKey: mealsQueryKey });
       await queryClient.invalidateQueries({ queryKey: ['meal-plans-effective'] });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to update meal');
@@ -230,6 +250,7 @@ export function WeeklyMealPlansPage() {
     setMessage('');
     try {
       const userId = api.getUserId();
+      const useLocalStore = !adminMode && !!userId;
       const input = {
         weeklyMealId: activeMealId,
         foodId,
@@ -237,13 +258,13 @@ export function WeeklyMealPlansPage() {
         unit: 'g',
       };
 
-      if (userId) {
+      if (useLocalStore) {
         await localStore.localCreateWeeklyMealPlanEntry(userId, input);
       } else {
-        await api.createWeeklyMealPlan(input);
+        await api.createWeeklyMealPlan(input, { forUserId });
       }
 
-      await queryClient.invalidateQueries({ queryKey: ['weekly-meal-plans'] });
+      await queryClient.invalidateQueries({ queryKey: entriesQueryKey });
       await queryClient.invalidateQueries({ queryKey: ['meal-plans-effective'] });
       setMessage('Added to weekly template');
       setMessageIsError(false);
@@ -260,12 +281,13 @@ export function WeeklyMealPlansPage() {
     setMessage('');
     try {
       const userId = api.getUserId();
-      if (userId) {
+      const useLocalStore = !adminMode && !!userId;
+      if (useLocalStore) {
         await localStore.localRemoveWeeklyMealPlanEntry(userId, id);
       } else {
-        await api.deleteWeeklyMealPlan(id);
+        await api.deleteWeeklyMealPlan(id, { forUserId });
       }
-      await queryClient.invalidateQueries({ queryKey: ['weekly-meal-plans'] });
+      await queryClient.invalidateQueries({ queryKey: entriesQueryKey });
       await queryClient.invalidateQueries({ queryKey: ['meal-plans-effective'] });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to remove');
@@ -286,12 +308,13 @@ export function WeeklyMealPlansPage() {
     setMessage('');
     try {
       const userId = api.getUserId();
-      if (userId) {
+      const useLocalStore = !adminMode && !!userId;
+      if (useLocalStore) {
         await localStore.localUpdateWeeklyMealPlanEntry(userId, entry.id, { quantity: qty });
       } else {
-        await api.updateWeeklyMealPlan(entry.id, { quantity: qty });
+        await api.updateWeeklyMealPlan(entry.id, { quantity: qty }, { forUserId });
       }
-      await queryClient.invalidateQueries({ queryKey: ['weekly-meal-plans'] });
+      await queryClient.invalidateQueries({ queryKey: entriesQueryKey });
       await queryClient.invalidateQueries({ queryKey: ['meal-plans-effective'] });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to update quantity');
@@ -302,7 +325,7 @@ export function WeeklyMealPlansPage() {
   if (mealsQuery.isLoading || entriesQuery.isLoading || foodsQuery.isLoading) {
     return (
       <div>
-        <PageHeader title="Weekly Meal Plans" backTo="/settings" />
+        <PageHeader title={title} backTo={backTo} />
         <div className="flex justify-center py-16 text-muted-foreground">Loading…</div>
       </div>
     );
@@ -311,7 +334,7 @@ export function WeeklyMealPlansPage() {
   return (
     <div>
       <div className="sticky top-0 z-30 bg-background shadow-[0_4px_24px_rgba(0,0,0,0.35)]">
-        <PageHeader embedded title="Weekly Meal Plans" backTo="/settings" />
+        <PageHeader embedded title={title} backTo={backTo} />
         <div className="mx-auto w-full min-w-0 max-w-lg border-b border-border px-4 py-2">
           <div className="flex gap-1 overflow-x-auto pb-2">
             {WEEKDAYS.map((dayName, index) => (
@@ -347,7 +370,7 @@ export function WeeklyMealPlansPage() {
               <p className="text-muted-foreground">
                 No targets for {WEEKDAYS[activeDay]}.{' '}
                 <Button variant="link" className="h-auto p-0 text-xs" asChild>
-                  <Link to="/weekly-targets">Set defaults</Link>
+                  <Link to={targetsLink}>Set defaults</Link>
                 </Button>
               </p>
             </div>

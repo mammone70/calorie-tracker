@@ -26,7 +26,19 @@ const emptyDayForm = (): DayForm => ({
   carbs: '',
 });
 
-export function WeeklyTargetsPage() {
+type WeeklyTargetsPageProps = {
+  forUserId?: string;
+  backTo?: string;
+  title?: string;
+};
+
+export function WeeklyTargetsPage({
+  forUserId,
+  backTo = '/settings',
+  title = 'Weekly Targets',
+}: WeeklyTargetsPageProps = {}) {
+  const adminMode = !!forUserId;
+  const queryKey = ['weekly-macro-targets', forUserId ?? 'self'];
   const queryClient = useQueryClient();
   const [forms, setForms] = useState<DayForm[]>(() => WEEKDAYS.map(() => emptyDayForm()));
   const [saving, setSaving] = useState(false);
@@ -34,8 +46,8 @@ export function WeeklyTargetsPage() {
   const [messageIsError, setMessageIsError] = useState(false);
 
   const weeklyQuery = useQuery({
-    queryKey: ['weekly-macro-targets'],
-    queryFn: () => api.getWeeklyMacroTargets() as Promise<WeeklyMacroTarget[]>,
+    queryKey,
+    queryFn: () => api.getWeeklyMacroTargets({ forUserId }) as Promise<WeeklyMacroTarget[]>,
   });
 
   useEffect(() => {
@@ -96,14 +108,14 @@ export function WeeklyTargetsPage() {
           throw new Error(`${WEEKDAYS[dayOfWeek]}: ${validationError}`);
         }
 
-        if (userId) {
-          await localStore.localUpsertWeeklyMacroTarget(userId, input);
+        if (adminMode || !userId) {
+          await api.upsertWeeklyMacroTarget(input, { forUserId });
         } else {
-          await api.upsertWeeklyMacroTarget(input);
+          await localStore.localUpsertWeeklyMacroTarget(userId, input);
         }
       }
 
-      await queryClient.invalidateQueries({ queryKey: ['weekly-macro-targets'] });
+      await queryClient.invalidateQueries({ queryKey });
       await queryClient.invalidateQueries({ queryKey: ['macro-targets-effective'] });
       setMessage('Weekly default targets updated');
       setMessageIsError(false);
@@ -118,7 +130,7 @@ export function WeeklyTargetsPage() {
   if (weeklyQuery.isLoading) {
     return (
       <div>
-        <PageHeader title="Weekly Targets" backTo="/settings" />
+        <PageHeader title={title} backTo={backTo} />
         <div className="flex justify-center py-16 text-muted-foreground">Loading…</div>
       </div>
     );
@@ -126,7 +138,7 @@ export function WeeklyTargetsPage() {
 
   return (
     <div>
-      <PageHeader title="Weekly Targets" backTo="/settings" />
+      <PageHeader title={title} backTo={backTo} />
       <div className="mx-auto w-full min-w-0 max-w-lg px-4 pb-8">
         <p className="my-4 text-sm text-muted-foreground">
           Set default macro targets for each day of the week. Individual dates can still be

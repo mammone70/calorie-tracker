@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Inject,
   Param,
   Put,
   Query,
@@ -10,45 +11,65 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  forUserIdQuerySchema,
   macroTargetInputSchema,
   macroTargetQuerySchema,
   type MacroTargetInput,
 } from '@calorie-tracker/shared';
+import { type DbClient } from '@calorie-tracker/db';
 import { zodPipe } from '../common/zod-validation.pipe';
+import { resolveActingUserId } from '../common/acting-user';
 import { JwtAuthGuard, type AuthUser } from '../auth/jwt-auth.guard';
+import { DB } from '../database/database.module';
 import { MacroTargetsService } from './macro-targets.service';
+
+const macroTargetRangeQuerySchema = macroTargetQuerySchema.merge(forUserIdQuerySchema);
 
 @Controller('macro-targets')
 @UseGuards(JwtAuthGuard)
 export class MacroTargetsController {
-  constructor(private readonly service: MacroTargetsService) {}
+  constructor(
+    @Inject(DB) private readonly db: DbClient,
+    private readonly service: MacroTargetsService,
+  ) {}
 
   @Get('effective')
-  findEffective(
+  async findEffective(
     @Req() req: { user: AuthUser },
-    @Query(zodPipe(macroTargetQuerySchema)) query: { from: string; to: string },
+    @Query(zodPipe(macroTargetRangeQuerySchema))
+    query: { from: string; to: string; forUserId?: string },
   ) {
-    return this.service.findEffectiveByRange(req.user.userId, query.from, query.to);
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    return this.service.findEffectiveByRange(userId, query.from, query.to);
   }
 
   @Get()
-  findByRange(
+  async findByRange(
     @Req() req: { user: AuthUser },
-    @Query(zodPipe(macroTargetQuerySchema)) query: { from: string; to: string },
+    @Query(zodPipe(macroTargetRangeQuerySchema))
+    query: { from: string; to: string; forUserId?: string },
   ) {
-    return this.service.findByRange(req.user.userId, query.from, query.to);
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    return this.service.findByRange(userId, query.from, query.to);
   }
 
   @Put()
-  upsert(
+  async upsert(
     @Req() req: { user: AuthUser },
+    @Query(zodPipe(forUserIdQuerySchema)) query: { forUserId?: string },
     @Body(zodPipe(macroTargetInputSchema)) body: MacroTargetInput,
   ) {
-    return this.service.upsert(req.user.userId, body);
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    return this.service.upsert(userId, body);
   }
 
   @Delete(':id')
-  remove(@Req() req: { user: AuthUser }, @Param('id') id: string) {
-    return this.service.remove(req.user.userId, id);
+  async remove(
+    @Req() req: { user: AuthUser },
+    @Query(zodPipe(forUserIdQuerySchema)) query: { forUserId?: string },
+    @Param('id') id: string,
+  ) {
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    return this.service.remove(userId, id);
   }
 }

@@ -28,12 +28,27 @@ export const foodSourceEnum = pgEnum('food_source', [
   'open_food_facts',
 ]);
 
+export const userRoleEnum = pgEnum('user_role', ['client', 'admin']);
+
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
+  role: userRoleEnum('role').notNull().default('client'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const invitations = pgTable('invitations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull(),
+  tokenHash: text('token_hash').notNull(),
+  invitedBy: uuid('invited_by')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const refreshTokens = pgTable('refresh_tokens', {
@@ -220,6 +235,7 @@ export const dailyLogMaterializations = pgTable(
 );
 
 export type User = typeof users.$inferSelect;
+export type Invitation = typeof invitations.$inferSelect;
 export type MacroTarget = typeof macroTargets.$inferSelect;
 export type WeeklyMacroTarget = typeof weeklyMacroTargets.$inferSelect;
 export type Food = typeof foods.$inferSelect;
@@ -232,6 +248,7 @@ export type DailyLogMaterialization = typeof dailyLogMaterializations.$inferSele
 
 export const schema = {
   users,
+  invitations,
   refreshTokens,
   macroTargets,
   weeklyMacroTargets,

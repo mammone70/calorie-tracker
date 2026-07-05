@@ -176,9 +176,40 @@ curl -s https://api.cal-count.mammonesoftware.org/api/health
 curl -I https://cal-count.mammonesoftware.org
 ```
 
-## 4. Create the first user (invite-only)
+## 4. Create the first admin and invite clients
 
-Registration is disabled when `ALLOW_REGISTRATION=false`. Create accounts with:
+Registration is disabled when `ALLOW_REGISTRATION=false`. New client accounts are created via **invite links** from the admin dashboard (Settings → Admin dashboard).
+
+### Promote or create an admin account
+
+After running migrations `0006_user_roles` and `0007_invitations`, promote your existing account:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm migrate  # if not already applied
+
+docker compose -f docker-compose.prod.yml exec postgres \
+  psql -U calorie -d calorie_tracker -c "SELECT 1"  # verify DB access
+
+# From repo on VPS (or via docker exec with DATABASE_URL):
+node packages/db/scripts/promote-user.js mammone@gmail.com
+```
+
+Or create a new admin directly:
+
+```bash
+node packages/db/scripts/create-user.js --admin you@example.com 'your-secure-password'
+```
+
+Ensure `WEB_ORIGIN=https://cal-count.mammonesoftware.org` is set in production `.env` so invite URLs are generated correctly.
+
+### Invite workflow
+
+1. Sign in as an admin → **Settings** → **Admin dashboard**
+2. Enter the client's email and click **Create invitation**
+3. Copy the invite link and send it to the client (email sending is manual for now)
+4. Client opens the link, sets a password, and registers as a `client` user
+
+Legacy CLI user creation (without invite) still works for bootstrap:
 
 ```bash
 cd /opt/calorie-tracker
@@ -200,11 +231,14 @@ Export on your dev machine (local Postgres running, same schema):
 pnpm --filter @calorie-tracker/db export:user mammone@gmail.com mammone-export.json
 ```
 
-Create the same user on production if needed (password can differ from dev):
+Create the same user on production if needed (password can differ from dev). After importing, promote to admin if this is your account:
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm --entrypoint node api \
   packages/db/scripts/create-user.js mammone@gmail.com 'your-production-password'
+
+docker compose -f docker-compose.prod.yml run --rm --entrypoint node api \
+  packages/db/scripts/promote-user.js mammone@gmail.com
 ```
 
 Copy the export file to the VPS:

@@ -4,6 +4,7 @@
  *
  * Usage:
  *   node packages/db/scripts/create-user.js user@example.com 'secure-password'
+ *   node packages/db/scripts/create-user.js --admin user@example.com 'secure-password'
  *
  * Requires DATABASE_URL in environment or .env at repo root.
  */
@@ -33,11 +34,13 @@ loadEnvFile(path.join(__dirname, '../../../.env'));
 loadEnvFile(path.join(__dirname, '../../../apps/api/.env'));
 
 async function main() {
-  const email = process.argv[2];
-  const password = process.argv[3];
+  const args = process.argv.slice(2);
+  const isAdmin = args[0] === '--admin';
+  const email = isAdmin ? args[1] : args[0];
+  const password = isAdmin ? args[2] : args[1];
 
   if (!email || !password) {
-    console.error('Usage: node packages/db/scripts/create-user.js <email> <password>');
+    console.error('Usage: node packages/db/scripts/create-user.js [--admin] <email> <password>');
     process.exit(1);
   }
 
@@ -51,6 +54,7 @@ async function main() {
     'postgresql://calorie:calorie@localhost:5432/calorie_tracker';
 
   const sql = postgres(connectionString, { max: 1, connect_timeout: 5 });
+  const role = isAdmin ? 'admin' : 'client';
 
   try {
     const normalizedEmail = email.toLowerCase();
@@ -65,11 +69,11 @@ async function main() {
     const now = new Date();
 
     await sql`
-      INSERT INTO users (id, email, password_hash, created_at, updated_at)
-      VALUES (${id}, ${normalizedEmail}, ${passwordHash}, ${now}, ${now})
+      INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
+      VALUES (${id}, ${normalizedEmail}, ${passwordHash}, ${role}, ${now}, ${now})
     `;
 
-    console.log(`Created user ${normalizedEmail} (${id})`);
+    console.log(`Created ${role} user ${normalizedEmail} (${id})`);
   } finally {
     await sql.end({ timeout: 1 });
   }

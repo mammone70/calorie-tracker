@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Inject,
   Param,
   Patch,
   Post,
@@ -11,15 +12,19 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  forUserIdQuerySchema,
   mealPlanEntryInputSchema,
   mealPlanQuerySchema,
   resolveEffectiveMealPlan,
   dayOfWeekFromDate,
   type MealPlanEntryInput,
 } from '@calorie-tracker/shared';
+import { type DbClient } from '@calorie-tracker/db';
 import { z } from 'zod';
 import { zodPipe } from '../common/zod-validation.pipe';
+import { resolveActingUserId } from '../common/acting-user';
 import { JwtAuthGuard, type AuthUser } from '../auth/jwt-auth.guard';
+import { DB } from '../database/database.module';
 import { MealPlansService } from './meal-plans.service';
 import { WeeklyMealPlansService } from './weekly-meal-plans.service';
 import { WeeklyMealsService } from './weekly-meals.service';
@@ -29,10 +34,13 @@ const dateBodySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
+const mealPlanDateQuerySchema = mealPlanQuerySchema.merge(forUserIdQuerySchema);
+
 @Controller('meal-plans')
 @UseGuards(JwtAuthGuard)
 export class MealPlansController {
   constructor(
+    @Inject(DB) private readonly db: DbClient,
     private readonly service: MealPlansService,
     private readonly weeklyEntriesService: WeeklyMealPlansService,
     private readonly weeklyMealsService: WeeklyMealsService,
@@ -42,14 +50,15 @@ export class MealPlansController {
   @Get('effective')
   async findEffective(
     @Req() req: { user: AuthUser },
-    @Query(zodPipe(mealPlanQuerySchema)) query: { date: string },
+    @Query(zodPipe(mealPlanDateQuerySchema)) query: { date: string; forUserId?: string },
   ) {
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
     const dayOfWeek = dayOfWeekFromDate(query.date);
     const [dayMeals, dateEntries, weeklyMeals, weeklyEntries] = await Promise.all([
-      this.dayMealsService.findByDate(req.user.userId, query.date),
-      this.service.findByDate(req.user.userId, query.date),
-      this.weeklyMealsService.findAll(req.user.userId, dayOfWeek),
-      this.weeklyEntriesService.findAll(req.user.userId, dayOfWeek),
+      this.dayMealsService.findByDate(userId, query.date),
+      this.service.findByDate(userId, query.date),
+      this.weeklyMealsService.findAll(userId, dayOfWeek),
+      this.weeklyEntriesService.findAll(userId, dayOfWeek),
     ]);
     return resolveEffectiveMealPlan(
       query.date,
@@ -63,24 +72,26 @@ export class MealPlansController {
   @Post('materialize-weekly')
   async materializeWeekly(
     @Req() req: { user: AuthUser },
+    @Query(zodPipe(forUserIdQuerySchema)) query: { forUserId?: string },
     @Body(zodPipe(dateBodySchema)) body: { date: string },
   ) {
-    const existingEntries = await this.service.findByDate(req.user.userId, body.date);
-    const existingMeals = await this.dayMealsService.findByDate(req.user.userId, body.date);
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    const existingEntries = await this.service.findByDate(userId, body.date);
+    const existingMeals = await this.dayMealsService.findByDate(userId, body.date);
     if (existingEntries.length > 0 || existingMeals.length > 0) {
       return { dayMeals: existingMeals, entries: existingEntries };
     }
 
     const dayOfWeek = dayOfWeekFromDate(body.date);
     const [weeklyMeals, weeklyEntries] = await Promise.all([
-      this.weeklyMealsService.findAll(req.user.userId, dayOfWeek),
-      this.weeklyEntriesService.findAll(req.user.userId, dayOfWeek),
+      this.weeklyMealsService.findAll(userId, dayOfWeek),
+      this.weeklyEntriesService.findAll(userId, dayOfWeek),
     ]);
 
     const mealIdMap = new Map<string, string>();
     const createdMeals = [];
     for (const meal of weeklyMeals) {
-      const created = await this.dayMealsService.create(req.user.userId, {
+      const created = await this.dayMealsService.create(userId, {
         planDate: body.date,
         mealIndex: meal.mealIndex,
         name: meal.name,
@@ -95,7 +106,7 @@ export class MealPlansController {
       const dayMealId = mealIdMap.get(entry.weeklyMealId);
       if (!dayMealId) continue;
       createdEntries.push(
-        await this.service.create(req.user.userId, {
+        await this.service.create(userId, {
           planDate: body.date,
           dayMealId,
           foodId: entry.foodId,
@@ -111,40 +122,52 @@ export class MealPlansController {
   @Post('reset-to-weekly')
   async resetToWeekly(
     @Req() req: { user: AuthUser },
+    @Query(zodPipe(forUserIdQuerySchema)) query: { forUserId?: string },
     @Body(zodPipe(dateBodySchema)) body: { date: string },
   ) {
-    await this.service.removeAllForDate(req.user.userId, body.date);
-    await this.dayMealsService.removeAllForDate(req.user.userId, body.date);
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    await this.service.removeAllForDate(userId, body.date);
+    await this.dayMealsService.removeAllForDate(userId, body.date);
     return { ok: true };
   }
 
   @Get()
-  findByDate(
+  async findByDate(
     @Req() req: { user: AuthUser },
-    @Query(zodPipe(mealPlanQuerySchema)) query: { date: string },
+    @Query(zodPipe(mealPlanDateQuerySchema)) query: { date: string; forUserId?: string },
   ) {
-    return this.service.findByDate(req.user.userId, query.date);
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    return this.service.findByDate(userId, query.date);
   }
 
   @Post()
-  create(
+  async create(
     @Req() req: { user: AuthUser },
+    @Query(zodPipe(forUserIdQuerySchema)) query: { forUserId?: string },
     @Body(zodPipe(mealPlanEntryInputSchema)) body: MealPlanEntryInput,
   ) {
-    return this.service.create(req.user.userId, body);
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    return this.service.create(userId, body);
   }
 
   @Patch(':id')
-  update(
+  async update(
     @Req() req: { user: AuthUser },
+    @Query(zodPipe(forUserIdQuerySchema)) query: { forUserId?: string },
     @Param('id') id: string,
     @Body(zodPipe(mealPlanEntryInputSchema.partial())) body: Partial<MealPlanEntryInput>,
   ) {
-    return this.service.update(req.user.userId, id, body);
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    return this.service.update(userId, id, body);
   }
 
   @Delete(':id')
-  remove(@Req() req: { user: AuthUser }, @Param('id') id: string) {
-    return this.service.remove(req.user.userId, id);
+  async remove(
+    @Req() req: { user: AuthUser },
+    @Query(zodPipe(forUserIdQuerySchema)) query: { forUserId?: string },
+    @Param('id') id: string,
+  ) {
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    return this.service.remove(userId, id);
   }
 }

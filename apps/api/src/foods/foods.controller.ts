@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Inject,
   Param,
   Patch,
   Post,
@@ -13,12 +14,16 @@ import {
 import {
   createFoodSchema,
   foodSearchQuerySchema,
+  forUserIdQuerySchema,
   updateFoodSchema,
   type CreateFoodInput,
   type UpdateFoodInput,
 } from '@calorie-tracker/shared';
+import { type DbClient } from '@calorie-tracker/db';
 import { zodPipe } from '../common/zod-validation.pipe';
+import { resolveActingUserId } from '../common/acting-user';
 import { JwtAuthGuard, type AuthUser } from '../auth/jwt-auth.guard';
+import { DB } from '../database/database.module';
 import { FoodsService } from './foods.service';
 import { FoodSearchService } from './food-search.service';
 
@@ -26,13 +31,18 @@ import { FoodSearchService } from './food-search.service';
 @UseGuards(JwtAuthGuard)
 export class FoodsController {
   constructor(
+    @Inject(DB) private readonly db: DbClient,
     private readonly foodsService: FoodsService,
     private readonly searchService: FoodSearchService,
   ) {}
 
   @Get()
-  findAll(@Req() req: { user: AuthUser }) {
-    return this.foodsService.findAll(req.user.userId);
+  async findAll(
+    @Req() req: { user: AuthUser },
+    @Query(zodPipe(forUserIdQuerySchema)) query: { forUserId?: string },
+  ) {
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    return this.foodsService.findAll(userId);
   }
 
   @Get('search')
@@ -41,8 +51,13 @@ export class FoodsController {
   }
 
   @Get(':id')
-  findOne(@Req() req: { user: AuthUser }, @Param('id') id: string) {
-    return this.foodsService.findOne(req.user.userId, id);
+  async findOne(
+    @Req() req: { user: AuthUser },
+    @Query(zodPipe(forUserIdQuerySchema)) query: { forUserId?: string },
+    @Param('id') id: string,
+  ) {
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    return this.foodsService.findOne(userId, id);
   }
 
   @Post()
