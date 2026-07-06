@@ -13,10 +13,12 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { FoodPicker } from '../components/FoodPicker';
 import { MacroProgress } from '../components/MacroProgress';
+import { NutrientsSummary, FoodAmountNutrients } from '../components/NutrientsSummary';
 import { PageHeader } from '../components/PageHeader';
-import { cn, inputFieldClass, selectClass } from '@/lib/utils';
-import { computeNutrients, sumNutrients } from '@calorie-tracker/client';
+import { cn, inputFieldClass } from '@/lib/utils';
+import { nutrientsForQuantity, sumNutrients } from '@calorie-tracker/client';
 import { api, localStore } from '../lib/client';
 import {
   DEFAULT_MEAL_COUNT,
@@ -26,6 +28,7 @@ import {
   defaultMealName,
   formatNutrientsSummary,
   normalizeMealTime,
+  sortWeeklyMealPlanEntries,
   type Food,
   type WeekdayIndex,
   type WeeklyMeal,
@@ -116,6 +119,9 @@ export function WeeklyMealPlansPage({
       list.push(entry);
       map.set(entry.weeklyMealId, list);
     }
+    for (const [mealId, entries] of map) {
+      map.set(mealId, sortWeeklyMealPlanEntries(entries));
+    }
     return map;
   }, [entriesQuery.data]);
 
@@ -132,13 +138,7 @@ export function WeeklyMealPlansPage({
     return sumNutrients(
       entries.map((entry) => {
         const food = foodsMap.get(entry.foodId);
-        if (!food) return { calories: 0, protein: 0, fat: 0, carbs: 0 };
-        const raw = entryQuantities[entry.id] ?? String(entry.quantity);
-        const qty = Number(raw);
-        if (!Number.isFinite(qty) || qty <= 0) {
-          return { calories: 0, protein: 0, fat: 0, carbs: 0 };
-        }
-        return computeNutrients(food.nutrientsPer100g, qty);
+        return nutrientsForQuantity(food, entryQuantities[entry.id], entry.quantity);
       }),
     );
   }, [activeMeals, entriesByMealId, foodsMap, entryQuantities]);
@@ -152,11 +152,23 @@ export function WeeklyMealPlansPage({
   }, [mealsQuery.data]);
 
   useEffect(() => {
-    const next: Record<string, string> = {};
-    for (const entry of entriesQuery.data ?? []) {
-      next[entry.id] = String(entry.quantity);
-    }
-    setEntryQuantities(next);
+    if (!entriesQuery.data) return;
+    setEntryQuantities((prev) => {
+      const next = { ...prev };
+      const validIds = new Set<string>();
+      for (const entry of entriesQuery.data) {
+        validIds.add(entry.id);
+        if (!(entry.id in prev)) {
+          next[entry.id] = String(entry.quantity);
+        }
+      }
+      for (const id of Object.keys(next)) {
+        if (!validIds.has(id)) {
+          delete next[id];
+        }
+      }
+      return next;
+    });
   }, [entriesQuery.data]);
 
   useEffect(() => {
@@ -336,17 +348,36 @@ export function WeeklyMealPlansPage({
     if (qty === entry.quantity) return;
 
     setMessage('');
+    const previousEntries = queryClient.getQueryData<WeeklyMealPlanEntry[]>(entriesQueryKey);
+
+    queryClient.setQueryData<WeeklyMealPlanEntry[]>(entriesQueryKey, (current) => {
+      if (!current) return current;
+      return sortWeeklyMealPlanEntries(
+        current.map((row) => (row.id === entry.id ? { ...row, quantity: qty } : row)),
+      );
+    });
+
     try {
       const userId = api.getUserId();
       const useLocalStore = !adminMode && !!userId;
       if (useLocalStore) {
         await localStore.localUpdateWeeklyMealPlanEntry(userId, entry.id, { quantity: qty });
       } else {
-        await api.updateWeeklyMealPlan(entry.id, { quantity: qty }, { forUserId });
+        const updated = (await api.updateWeeklyMealPlan(
+          entry.id,
+          { quantity: qty },
+          { forUserId },
+        )) as WeeklyMealPlanEntry;
+        queryClient.setQueryData<WeeklyMealPlanEntry[]>(entriesQueryKey, (current) => {
+          if (!current) return current;
+          return sortWeeklyMealPlanEntries(
+            current.map((row) => (row.id === entry.id ? updated : row)),
+          );
+        });
       }
-      await queryClient.invalidateQueries({ queryKey: entriesQueryKey });
       await queryClient.invalidateQueries({ queryKey: ['meal-plans-effective'] });
     } catch (error) {
+      queryClient.setQueryData(entriesQueryKey, previousEntries);
       setMessage(error instanceof Error ? error.message : 'Failed to update quantity');
       setMessageIsError(true);
     }
@@ -455,6 +486,12 @@ export function WeeklyMealPlansPage({
         <div className="space-y-4">
           {activeMeals.map((meal) => {
             const mealEntries = entriesByMealId.get(meal.id) ?? [];
+            const mealNutrients = sumNutrients(
+              mealEntries.map((entry) => {
+                const food = foodsMap.get(entry.foodId);
+                return nutrientsForQuantity(food, entryQuantities[entry.id], entry.quantity);
+              }),
+            );
             return (
               <Card key={meal.id}>
                 <CardContent className="space-y-3 pt-4">
@@ -486,12 +523,21 @@ export function WeeklyMealPlansPage({
                     </div>
                   </div>
 
+                  {mealEntries.length > 0 && (
+                    <NutrientsSummary nutrients={mealNutrients} className="text-sm" />
+                  )}
+
                   {mealEntries.length === 0 ? (
                     <p className="text-sm italic text-muted-foreground">No foods in this meal yet.</p>
                   ) : (
                     <ul className="space-y-2">
                       {mealEntries.map((entry) => {
                         const food = foodsMap.get(entry.foodId);
+                        const itemNutrients = nutrientsForQuantity(
+                          food,
+                          entryQuantities[entry.id],
+                          entry.quantity,
+                        );
                         return (
                           <li
                             key={entry.id}
@@ -499,6 +545,7 @@ export function WeeklyMealPlansPage({
                           >
                             <div className="min-w-0 flex-1">
                               <p className="font-medium">{food?.name ?? 'Unknown food'}</p>
+                              <NutrientsSummary nutrients={itemNutrients} className="mt-0.5" />
                             </div>
                             <div className="flex shrink-0 items-center gap-2">
                               <Input
@@ -563,20 +610,12 @@ export function WeeklyMealPlansPage({
                 <Label htmlFor="add-food-select" className="text-sm font-medium">
                   Food
                 </Label>
-                <select
+                <FoodPicker
                   id="add-food-select"
-                  className={cn(selectClass, 'mb-0')}
+                  foods={foodsQuery.data ?? []}
                   value={foodId}
-                  onChange={(e) => setFoodId(e.target.value)}
-                >
-                  <option value="">Select food…</option>
-                  {(foodsQuery.data ?? []).map((food) => (
-                    <option key={food.id} value={food.id}>
-                      {food.brand ? `${food.brand} - ` : ''}
-                      {food.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setFoodId}
+                />
               </div>
 
               <div className="space-y-1">
@@ -592,6 +631,12 @@ export function WeeklyMealPlansPage({
                   onChange={(e) => setQuantity(e.target.value)}
                 />
               </div>
+
+              <FoodAmountNutrients
+                food={(foodsQuery.data ?? []).find((food) => food.id === foodId)}
+                quantity={quantity}
+                className="text-sm"
+              />
 
               {dialogError && <p className="text-sm text-destructive">{dialogError}</p>}
             </div>

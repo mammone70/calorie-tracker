@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { ThemeToggle } from './ThemeToggle';
+import { HeaderActions } from './HeaderActions';
 import { cn } from '@/lib/utils';
 
 const tabs = [
@@ -28,7 +28,7 @@ export function AppLayout() {
         <header className="sticky top-0 z-30 border-b border-border bg-background px-4 py-2 shadow-[0_4px_24px_rgba(0,0,0,0.35)] pt-[max(0.5rem,env(safe-area-inset-top))]">
           <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
             <h1 className="truncate text-lg font-bold text-primary">Calorie Tracker</h1>
-            <ThemeToggle />
+            <HeaderActions />
           </div>
         </header>
       )}

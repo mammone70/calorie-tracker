@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { ThemeToggle } from './ThemeToggle';
+import { HeaderActions } from './HeaderActions';
 
 export function PageHeader({
   title,
@@ -27,7 +27,7 @@ export function PageHeader({
         )}
         <h1 className="min-w-0 truncate text-lg font-bold">{title}</h1>
         <div className="ml-auto shrink-0">
-          <ThemeToggle />
+          <HeaderActions />
         </div>
       </div>
     </header>

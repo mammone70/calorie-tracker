@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, eq, isNull, inArray } from 'drizzle-orm';
+import { and, eq, isNull, inArray, asc } from 'drizzle-orm';
 import { weeklyMealPlanEntries, weeklyMeals, type DbClient } from '@calorie-tracker/db';
 import type { WeeklyMealPlanEntryInput } from '@calorie-tracker/shared';
 import { DB } from '../database/database.module';
@@ -30,6 +30,7 @@ export class WeeklyMealPlansService {
         isNull(weeklyMealPlanEntries.deletedAt),
         mealIds ? inArray(weeklyMealPlanEntries.weeklyMealId, mealIds) : undefined,
       ),
+      orderBy: [asc(weeklyMealPlanEntries.createdAt), asc(weeklyMealPlanEntries.id)],
     });
     return rows.map(serializeWeeklyMealPlanEntry);
   }

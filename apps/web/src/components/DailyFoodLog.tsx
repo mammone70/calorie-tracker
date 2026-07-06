@@ -27,7 +27,10 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { cn, inputFieldClass, selectClass } from '@/lib/utils';
+import { cn, inputFieldClass } from '@/lib/utils';
+import { nutrientsForQuantity, sumNutrients } from '@calorie-tracker/client';
+import { NutrientsSummary, FoodAmountNutrients } from './NutrientsSummary';
+import { FoodPicker } from './FoodPicker';
 import { api, localStore } from '../lib/client';
 
 type DailyFoodLogProps = {
@@ -268,12 +271,25 @@ export function DailyFoodLog({
       )}
 
       <div className="space-y-4">
-        {grouped.map((meal) => (
+        {grouped.map((meal) => {
+          const mealNutrients = sumNutrients(
+            meal.logs.map((log) => {
+              const food = foodsMap.get(log.foodId);
+              return nutrientsForQuantity(food, draftQuantities[log.id], log.quantity);
+            }),
+          );
+
+          return (
           <Card key={meal.id}>
-            <CardHeader className="flex-row items-baseline justify-between space-y-0 pb-2">
-              <CardTitle className="text-base">{meal.name}</CardTitle>
+            <CardHeader className="flex-row items-start justify-between space-y-0 pb-2">
+              <div className="min-w-0">
+                <CardTitle className="text-base">{meal.name}</CardTitle>
+                {meal.logs.length > 0 && <NutrientsSummary nutrients={mealNutrients} className="mt-1" />}
+              </div>
               {formatMealTime(meal.mealTime) && (
-                <span className="text-sm text-muted-foreground">{formatMealTime(meal.mealTime)}</span>
+                <span className="shrink-0 text-sm text-muted-foreground">
+                  {formatMealTime(meal.mealTime)}
+                </span>
               )}
             </CardHeader>
             <CardContent className="space-y-2">
@@ -284,6 +300,11 @@ export function DailyFoodLog({
                   {meal.logs.map((log) => {
                     const food = foodsMap.get(log.foodId);
                     const isPending = log.status === 'pending';
+                    const itemNutrients = nutrientsForQuantity(
+                      food,
+                      draftQuantities[log.id],
+                      log.quantity,
+                    );
                     return (
                       <li
                         key={log.id}
@@ -298,6 +319,7 @@ export function DailyFoodLog({
                               <p className="font-medium">{food?.name ?? 'Unknown food'}</p>
                               {isPending && <Badge variant="secondary">Planned</Badge>}
                             </div>
+                            <NutrientsSummary nutrients={itemNutrients} className="mt-0.5" />
                             {isPending && (
                               <p className="text-xs text-primary">Confirm when eaten</p>
                             )}
@@ -352,7 +374,8 @@ export function DailyFoodLog({
               )}
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       {showAddFood && (
@@ -373,20 +396,12 @@ export function DailyFoodLog({
                 <Label htmlFor="log-food-select" className="text-sm font-medium">
                   Food
                 </Label>
-                <select
+                <FoodPicker
                   id="log-food-select"
-                  className={cn(selectClass, 'mb-0')}
+                  foods={foodsQuery.data ?? []}
                   value={foodId}
-                  onChange={(e) => setFoodId(e.target.value)}
-                >
-                  <option value="">Select food…</option>
-                  {(foodsQuery.data ?? []).map((food) => (
-                    <option key={food.id} value={food.id}>
-                      {food.brand ? `${food.brand} - ` : ''}
-                      {food.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setFoodId}
+                />
               </div>
 
               <div className="space-y-1">
@@ -402,6 +417,12 @@ export function DailyFoodLog({
                   onChange={(e) => setQuantity(e.target.value)}
                 />
               </div>
+
+              <FoodAmountNutrients
+                food={(foodsQuery.data ?? []).find((food) => food.id === foodId)}
+                quantity={quantity}
+                className="text-sm"
+              />
 
               {dialogError && <p className="text-sm text-destructive">{dialogError}</p>}
 

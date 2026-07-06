@@ -38,3 +38,16 @@ export function sumNutrients(
     carbs: Math.round(totals.carbs),
   };
 }
+
+const zeroNutrients = { calories: 0, protein: 0, fat: 0, carbs: 0 };
+
+export function nutrientsForQuantity(
+  food: { nutrientsPer100g: { calories: number; protein: number; fat: number; carbs: number } } | undefined,
+  rawQty: string | undefined,
+  fallbackQty: number,
+) {
+  if (!food) return zeroNutrients;
+  const qty = Number(rawQty ?? String(fallbackQty));
+  if (!Number.isFinite(qty) || qty <= 0) return zeroNutrients;
+  return computeNutrients(food.nutrientsPer100g, qty);
+}

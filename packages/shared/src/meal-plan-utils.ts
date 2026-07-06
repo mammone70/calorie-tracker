@@ -142,3 +142,14 @@ export function formatMealTime(mealTime: string | null | undefined): string | nu
   const hour12 = hour % 12 || 12;
   return `${hour12}:${minuteStr} ${period}`;
 }
+
+/** Stable display order: oldest first, then by id. */
+export function sortWeeklyMealPlanEntries<T extends { createdAt: string; id: string }>(
+  entries: T[],
+): T[] {
+  return [...entries].sort((a, b) => {
+    const byCreated = a.createdAt.localeCompare(b.createdAt);
+    if (byCreated !== 0) return byCreated;
+    return a.id.localeCompare(b.id);
+  });
+}

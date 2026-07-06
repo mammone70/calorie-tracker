@@ -32,7 +32,7 @@ cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env
 # Edit .env — set JWT secrets and optional USDA_API_KEY
 
-# 3. Start Postgres
+# 3. Start Postgres (use docker-compose.yml — not docker-compose.prod.yml)
 docker compose up -d
 
 # 4. Run migrations
@@ -99,3 +99,20 @@ Production deploys are triggered by pushing a version tag (e.g. `v0.1.0`) — se
 | `pnpm build:packages` | Build shared, db, and client packages |
 | `pnpm db:migrate` | Apply Postgres migrations |
 | `pnpm db:studio` | Open Drizzle Studio |
+
+## Local Postgres troubleshooting
+
+For local development, always use:
+
+```bash
+docker compose up -d          # docker-compose.yml
+```
+
+Do **not** use `docker-compose.prod.yml` locally unless you have a production `.env` with `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` set. Starting prod compose without those vars creates a Postgres container that exits immediately.
+
+If Postgres is stuck or broken:
+
+```bash
+docker compose -f docker-compose.prod.yml down   # stop mistaken prod stack
+docker compose up -d postgres                    # start local dev DB
+```
