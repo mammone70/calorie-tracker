@@ -19,6 +19,13 @@ type DayForm = {
   carbs: string;
 };
 
+const MACRO_FIELDS = [
+  { key: 'calories' as const, label: 'Calories', placeholder: 'e.g. 2200' },
+  { key: 'protein' as const, label: 'Protein (g)', placeholder: 'e.g. 180' },
+  { key: 'fat' as const, label: 'Fat (g)', placeholder: 'e.g. 70' },
+  { key: 'carbs' as const, label: 'Carbs (g)', placeholder: 'e.g. 200' },
+];
+
 const emptyDayForm = (): DayForm => ({
   calories: '',
   protein: '',
@@ -162,35 +169,20 @@ export function WeeklyTargetsPage({
                 <CardTitle className="text-base">{dayName}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-4 gap-2">
-                  <MacroCaloriesInput
-                    className="px-2 text-sm"
-                    placeholder="Cal"
-                    value={form.calories}
-                    onChange={(value) => updateDay(index, 'calories', value)}
-                    invalid={invalid}
-                  />
-                  <MacroCaloriesInput
-                    className="px-2 text-sm"
-                    placeholder="Protein"
-                    value={form.protein}
-                    onChange={(value) => updateDay(index, 'protein', value)}
-                    invalid={invalid}
-                  />
-                  <MacroCaloriesInput
-                    className="px-2 text-sm"
-                    placeholder="Fat"
-                    value={form.fat}
-                    onChange={(value) => updateDay(index, 'fat', value)}
-                    invalid={invalid}
-                  />
-                  <MacroCaloriesInput
-                    className="px-2 text-sm"
-                    placeholder="Carbs"
-                    value={form.carbs}
-                    onChange={(value) => updateDay(index, 'carbs', value)}
-                    invalid={invalid}
-                  />
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {MACRO_FIELDS.map((field) => (
+                    <MacroCaloriesInput
+                      key={field.key}
+                      id={`weekly-target-${dayName.toLowerCase()}-${field.key}`}
+                      compact
+                      className="px-2 text-sm"
+                      label={field.label}
+                      placeholder={field.placeholder}
+                      value={form[field.key]}
+                      onChange={(value) => updateDay(index, field.key, value)}
+                      invalid={invalid}
+                    />
+                  ))}
                 </div>
                 <MacroCaloriesFeedback validation={validation} className="mt-2" />
               </CardContent>

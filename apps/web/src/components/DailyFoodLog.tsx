@@ -17,8 +17,17 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { cn, selectClass } from '@/lib/utils';
+import { Label } from '@/components/ui/label';
+import { cn, inputFieldClass, selectClass } from '@/lib/utils';
 import { api, localStore } from '../lib/client';
 
 type DailyFoodLogProps = {
@@ -44,10 +53,11 @@ export function DailyFoodLog({
 }: DailyFoodLogProps) {
   const queryClient = useQueryClient();
   const materializedRef = useRef(false);
-  const addFoodFormRef = useRef<HTMLDivElement>(null);
   const [activeMealId, setActiveMealId] = useState('');
+  const [addFoodMealId, setAddFoodMealId] = useState('');
   const [foodId, setFoodId] = useState(preselectedFoodId ?? '');
   const [quantity, setQuantity] = useState('100');
+  const [dialogError, setDialogError] = useState('');
   const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -164,30 +174,36 @@ export function DailyFoodLog({
     });
   };
 
-  const selectMealForAdd = (mealId: string) => {
-    setActiveMealId(mealId);
-    requestAnimationFrame(() => {
-      addFoodFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
+  const selectMealForAdd = (meal: EffectiveMealBlock) => {
+    setActiveMealId(meal.id);
+    setAddFoodMealId(meal.id);
+    setFoodId(preselectedFoodId ?? '');
+    setQuantity('100');
+    setDialogError('');
   };
+
+  const closeAddFoodDialog = () => {
+    setAddFoodMealId('');
+    setDialogError('');
+  };
+
+  const addFoodMeal = meals.find((meal) => meal.id === addFoodMealId);
 
   const addFood = async () => {
     const meal = meals.find((item) => item.id === activeMealId);
     if (!meal || !foodId) {
-      setMessage('Select a meal and food');
-      setMessageIsError(true);
+      setDialogError('Select a food');
       return;
     }
 
     const qty = Number(quantity);
     if (!Number.isFinite(qty) || qty <= 0) {
-      setMessage('Enter a valid quantity in grams');
-      setMessageIsError(true);
+      setDialogError('Enter a valid quantity in grams');
       return;
     }
 
     setSaving(true);
-    setMessage('');
+    setDialogError('');
     try {
       const userId = api.getUserId();
       const input = {
@@ -209,9 +225,10 @@ export function DailyFoodLog({
       setMessage('Food logged');
       setMessageIsError(false);
       setQuantity('100');
+      setFoodId('');
+      closeAddFoodDialog();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Failed to log food');
-      setMessageIsError(true);
+      setDialogError(error instanceof Error ? error.message : 'Failed to log food');
     } finally {
       setSaving(false);
     }
@@ -286,7 +303,7 @@ export function DailyFoodLog({
                             )}
                             <div className="mt-2 flex items-center gap-2">
                               <Input
-                                className="mb-0 w-24"
+                                className={cn(inputFieldClass, 'w-24')}
                                 inputMode="decimal"
                                 value={draftQuantities[log.id] ?? String(log.quantity)}
                                 onChange={(e) =>
@@ -328,7 +345,7 @@ export function DailyFoodLog({
                 <Button
                   variant="link"
                   className="h-auto p-0"
-                  onClick={() => selectMealForAdd(meal.id)}
+                  onClick={() => selectMealForAdd(meal)}
                 >
                   Add food to this meal
                 </Button>
@@ -339,50 +356,70 @@ export function DailyFoodLog({
       </div>
 
       {showAddFood && (
-        <div ref={addFoodFormRef}>
-        <Card className="mt-4">
-          <CardHeader>
-            <CardTitle className="text-base">
-              Add food to {meals.find((meal) => meal.id === activeMealId)?.name ?? 'selected meal'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <select
-              className={selectClass}
-              value={activeMealId}
-              onChange={(e) => setActiveMealId(e.target.value)}
-            >
-              {meals.map((meal) => (
-                <option key={meal.id} value={meal.id}>
-                  {meal.name}
-                  {formatMealTime(meal.mealTime) ? ` (${formatMealTime(meal.mealTime)})` : ''}
-                </option>
-              ))}
-            </select>
-            <select className={selectClass} value={foodId} onChange={(e) => setFoodId(e.target.value)}>
-              <option value="">Select food…</option>
-              {(foodsQuery.data ?? []).map((food) => (
-                <option key={food.id} value={food.id}>
-                  {food.brand ? `${food.brand} - ` : ''}
-                  {food.name}
-                </option>
-              ))}
-            </select>
-            <Input
-              placeholder="Quantity (g)"
-              inputMode="decimal"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-            />
-            <Button variant="outline" className="w-full" onClick={() => void addFood()} disabled={saving}>
-              {saving ? 'Adding…' : 'Log extra food'}
-            </Button>
-            <Button variant="link" className="w-full" asChild>
-              <Link to="/foods/search">Search or add new foods</Link>
-            </Button>
-          </CardContent>
-        </Card>
-        </div>
+        <Dialog
+          open={!!addFoodMealId}
+          onOpenChange={(open) => {
+            if (!open) closeAddFoodDialog();
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add food to {addFoodMeal?.name ?? 'meal'}</DialogTitle>
+              <DialogDescription>Logging for {date}</DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label htmlFor="log-food-select" className="text-sm font-medium">
+                  Food
+                </Label>
+                <select
+                  id="log-food-select"
+                  className={cn(selectClass, 'mb-0')}
+                  value={foodId}
+                  onChange={(e) => setFoodId(e.target.value)}
+                >
+                  <option value="">Select food…</option>
+                  {(foodsQuery.data ?? []).map((food) => (
+                    <option key={food.id} value={food.id}>
+                      {food.brand ? `${food.brand} - ` : ''}
+                      {food.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="log-food-quantity" className="text-sm font-medium">
+                  Quantity (g)
+                </Label>
+                <Input
+                  id="log-food-quantity"
+                  placeholder="e.g. 100"
+                  inputMode="decimal"
+                  className={inputFieldClass}
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                />
+              </div>
+
+              {dialogError && <p className="text-sm text-destructive">{dialogError}</p>}
+
+              <Button variant="link" className="h-auto p-0" asChild>
+                <Link to="/foods/search">Search or add new foods</Link>
+              </Button>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeAddFoodDialog}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={() => void addFood()} disabled={saving}>
+                {saving ? 'Adding…' : 'Log food'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

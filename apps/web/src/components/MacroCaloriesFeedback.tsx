@@ -1,6 +1,6 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
+import { cn, inputFieldClass } from '@/lib/utils';
 import type { MacroCaloriesValidation } from '../hooks/useMacroCaloriesValidation';
 
 type MacroCaloriesFeedbackProps = {
@@ -33,6 +33,7 @@ type MacroCaloriesInputProps = {
   label?: string;
   id?: string;
   invalid?: boolean;
+  compact?: boolean;
   className?: string;
 };
 
@@ -43,16 +44,18 @@ export function MacroCaloriesInput({
   label,
   id,
   invalid = false,
+  compact = false,
   className = '',
 }: MacroCaloriesInputProps) {
   const input = (
     <Input
       id={id}
-      className={cn('mb-0', className)}
+      className={cn(inputFieldClass, className)}
       placeholder={placeholder}
       inputMode="decimal"
       value={value}
       aria-invalid={invalid}
+      aria-label={!label ? placeholder : undefined}
       onChange={(e) => onChange(e.target.value)}
     />
   );
@@ -61,7 +64,12 @@ export function MacroCaloriesInput({
 
   return (
     <div className="space-y-1">
-      <Label htmlFor={id}>{label}</Label>
+      <Label
+        htmlFor={id}
+        className={cn(compact ? 'text-xs font-medium text-foreground' : undefined)}
+      >
+        {label}
+      </Label>
       {input}
     </div>
   );

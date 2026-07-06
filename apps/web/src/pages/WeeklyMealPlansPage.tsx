@@ -2,12 +2,20 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MacroProgress } from '../components/MacroProgress';
 import { PageHeader } from '../components/PageHeader';
-import { cn, selectClass } from '@/lib/utils';
+import { cn, inputFieldClass, selectClass } from '@/lib/utils';
 import { computeNutrients, sumNutrients } from '@calorie-tracker/client';
 import { api, localStore } from '../lib/client';
 import {
@@ -16,7 +24,6 @@ import {
   MIN_MEALS_PER_DAY,
   WEEKDAYS,
   defaultMealName,
-  formatMealTime,
   formatNutrientsSummary,
   normalizeMealTime,
   type Food,
@@ -56,6 +63,8 @@ export function WeeklyMealPlansPage({
   const [activeDay, setActiveDay] = useState<WeekdayIndex>(0);
   const [foodId, setFoodId] = useState('');
   const [activeMealId, setActiveMealId] = useState('');
+  const [addFoodMealId, setAddFoodMealId] = useState('');
+  const [dialogError, setDialogError] = useState('');
   const [quantity, setQuantity] = useState('100');
   const [message, setMessage] = useState('');
   const [messageIsError, setMessageIsError] = useState(false);
@@ -161,6 +170,12 @@ export function WeeklyMealPlansPage({
   }, [activeDay, activeMeals.length, mealsQuery.isLoading, initializedDays]);
 
   useEffect(() => {
+    setAddFoodMealId('');
+    setFoodId('');
+    setDialogError('');
+  }, [activeDay]);
+
+  useEffect(() => {
     if (!activeMealId && activeMeals.length > 0) {
       setActiveMealId(activeMeals[0].id);
     }
@@ -233,21 +248,35 @@ export function WeeklyMealPlansPage({
     }
   };
 
+  const openAddFoodDialog = (meal: WeeklyMeal) => {
+    setActiveMealId(meal.id);
+    setAddFoodMealId(meal.id);
+    setFoodId('');
+    setQuantity('100');
+    setDialogError('');
+  };
+
+  const closeAddFoodDialog = () => {
+    setAddFoodMealId('');
+    setFoodId('');
+    setDialogError('');
+  };
+
+  const addFoodMeal = activeMeals.find((meal) => meal.id === addFoodMealId);
+
   const addEntry = async () => {
     if (!foodId || !activeMealId) {
-      setMessage('Select a meal and food');
-      setMessageIsError(true);
+      setDialogError('Select a food');
       return;
     }
     const qty = Number(quantity);
     if (!Number.isFinite(qty) || qty <= 0) {
-      setMessage('Enter a valid quantity in grams');
-      setMessageIsError(true);
+      setDialogError('Enter a valid quantity in grams');
       return;
     }
 
     setSaving(true);
-    setMessage('');
+    setDialogError('');
     try {
       const userId = api.getUserId();
       const useLocalStore = !adminMode && !!userId;
@@ -269,9 +298,10 @@ export function WeeklyMealPlansPage({
       setMessage('Added to weekly template');
       setMessageIsError(false);
       setQuantity('100');
+      setFoodId('');
+      closeAddFoodDialog();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Failed to add');
-      setMessageIsError(true);
+      setDialogError(error instanceof Error ? error.message : 'Failed to add');
     } finally {
       setSaving(false);
     }
@@ -472,7 +502,7 @@ export function WeeklyMealPlansPage({
                             </div>
                             <div className="flex shrink-0 items-center gap-2">
                               <Input
-                                className="mb-0 w-20 text-right"
+                                className={cn(inputFieldClass, 'w-20 text-right')}
                                 inputMode="decimal"
                                 aria-label={`Quantity for ${food?.name ?? 'food'}`}
                                 value={entryQuantities[entry.id] ?? String(entry.quantity)}
@@ -504,7 +534,7 @@ export function WeeklyMealPlansPage({
                     type="button"
                     variant="link"
                     className="h-auto p-0"
-                    onClick={() => setActiveMealId(meal.id)}
+                    onClick={() => openAddFoodDialog(meal)}
                   >
                     Add food to this meal
                   </Button>
@@ -514,48 +544,68 @@ export function WeeklyMealPlansPage({
           })}
         </div>
 
-        {activeMeals.length > 0 && (
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle className="text-base">
-                Add food to{' '}
-                {activeMeals.find((meal) => meal.id === activeMealId)?.name ?? 'selected meal'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <select
-                className={selectClass}
-                value={activeMealId}
-                onChange={(e) => setActiveMealId(e.target.value)}
-              >
-                {activeMeals.map((meal) => (
-                  <option key={meal.id} value={meal.id}>
-                    {meal.name}
-                    {formatMealTime(meal.mealTime) ? ` (${formatMealTime(meal.mealTime)})` : ''}
-                  </option>
-                ))}
-              </select>
-              <select className={selectClass} value={foodId} onChange={(e) => setFoodId(e.target.value)}>
-                <option value="">Select food…</option>
-                {(foodsQuery.data ?? []).map((food) => (
-                  <option key={food.id} value={food.id}>
-                    {food.brand ? `${food.brand} - ` : ''}
-                    {food.name}
-                  </option>
-                ))}
-              </select>
-              <Input
-                placeholder="Quantity (g)"
-                inputMode="decimal"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-              />
-              <Button type="button" className="w-full" onClick={() => void addEntry()} disabled={saving}>
+        <Dialog
+          open={!!addFoodMealId}
+          onOpenChange={(open) => {
+            if (!open) closeAddFoodDialog();
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add food to {addFoodMeal?.name ?? 'meal'}</DialogTitle>
+              <DialogDescription>
+                {WEEKDAYS[activeDay]} weekly meal plan template
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label htmlFor="add-food-select" className="text-sm font-medium">
+                  Food
+                </Label>
+                <select
+                  id="add-food-select"
+                  className={cn(selectClass, 'mb-0')}
+                  value={foodId}
+                  onChange={(e) => setFoodId(e.target.value)}
+                >
+                  <option value="">Select food…</option>
+                  {(foodsQuery.data ?? []).map((food) => (
+                    <option key={food.id} value={food.id}>
+                      {food.brand ? `${food.brand} - ` : ''}
+                      {food.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="add-food-quantity" className="text-sm font-medium">
+                  Quantity (g)
+                </Label>
+                <Input
+                  id="add-food-quantity"
+                  placeholder="e.g. 100"
+                  inputMode="decimal"
+                  className={inputFieldClass}
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                />
+              </div>
+
+              {dialogError && <p className="text-sm text-destructive">{dialogError}</p>}
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeAddFoodDialog}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={() => void addEntry()} disabled={saving}>
                 {saving ? 'Adding…' : 'Add to template'}
               </Button>
-            </CardContent>
-          </Card>
-        )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
