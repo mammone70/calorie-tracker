@@ -47,7 +47,7 @@ export function CalendarPage() {
         Tap a day to view or edit targets. Blue dot = weekly default, red dot = custom override.
       </p>
       <Card>
-        <CardContent className="calendar-dark p-2 pt-4">
+        <CardContent className="calendar-dark flex justify-center p-2 pt-4">
           <DayPicker
             mode="single"
             month={month}
@@ -81,6 +81,7 @@ export function CalendarPage() {
           --rdp-accent-color: var(--primary);
           --rdp-accent-background-color: var(--primary);
           color: var(--foreground);
+          width: fit-content;
         }
         .calendar-dark .rdp-day-weekly::after {
           content: '';
