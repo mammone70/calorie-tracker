@@ -9,7 +9,13 @@
   html,
   body,
   #root {
-    @apply min-h-dvh w-full bg-background text-foreground antialiased;
+    @apply min-h-dvh w-full text-foreground antialiased;
+    background-color: var(--background);
+    background-image:
+      radial-gradient(ellipse 90% 70% at 0% 0%, var(--background-highlight), transparent 55%),
+      radial-gradient(ellipse 80% 60% at 100% 100%, var(--background-shadow), transparent 50%),
+      linear-gradient(90deg, var(--background-from) 0%, var(--background) 48%, var(--background-to) 100%);
+    background-attachment: fixed;
   }
 
   body {
@@ -33,10 +39,16 @@
   }
 
   :root {
-    --background: rgb(250, 250, 250);
+    --background: rgb(243, 243, 243);
+    --background-from: rgb(232, 235, 242);
+    --background-to: rgb(248, 246, 241);
+    --background-highlight: rgba(255, 255, 255, 0.65);
+    --background-shadow: rgba(0, 0, 0, 0.04);
     --foreground: rgb(9, 9, 11);
-    --card: rgb(255, 255, 255);
+    --card: rgb(252, 252, 252);
     --card-foreground: rgb(9, 9, 11);
+    --surface: rgb(252, 252, 252);
+    --surface-border: rgba(0, 0, 0, 0.08);
     --popover: rgb(255, 255, 255);
     --popover-foreground: rgb(24, 24, 27);
     --primary: rgb(2, 85, 163);
@@ -88,11 +100,17 @@
   }
 
   .dark {
-    --background: rgb(22, 22, 22);
+    --background: rgb(30, 30, 32);
+    --background-from: rgb(22, 24, 30);
+    --background-to: rgb(42, 36, 33);
+    --background-highlight: rgba(255, 255, 255, 0.045);
+    --background-shadow: rgba(0, 0, 0, 0.35);
     --foreground: rgb(255, 255, 255);
-    --card: rgb(30, 30, 30);
+    --card: rgb(44, 44, 46);
     --card-foreground: rgb(255, 255, 255);
-    --popover: rgb(30, 30, 30);
+    --surface: rgb(44, 44, 46);
+    --surface-border: rgba(255, 255, 255, 0.09);
+    --popover: rgb(44, 44, 46);
     --popover-foreground: rgb(255, 255, 255);
     --primary: rgb(3, 87, 165);
     --primary-foreground: rgb(255, 255, 255);
@@ -104,8 +122,8 @@
     --accent-foreground: rgb(255, 255, 255);
     --destructive: rgb(255, 0, 0);
     --destructive-foreground: rgb(250, 250, 250);
-    --border: rgb(41, 41, 41);
-    --input: rgb(22, 22, 22);
+    --border: rgba(255, 255, 255, 0.09);
+    --input: rgba(255, 255, 255, 0.06);
     --ring: rgb(3, 87, 165);
     --chart-1: rgb(208, 250, 229);
     --chart-2: rgb(94, 233, 181);
@@ -142,9 +160,15 @@
 
   .theme-pink-galore {
     --background: oklch(0.9821 0 0);
+    --background-from: oklch(0.968 0.012 42);
+    --background-to: oklch(0.985 0.008 75);
+    --background-highlight: rgba(255, 255, 255, 0.7);
+    --background-shadow: rgba(67, 47, 35, 0.06);
     --foreground: oklch(0.2435 0 0);
-    --card: oklch(0.9911 0 0);
+    --card: oklch(0.995 0.004 42);
     --card-foreground: oklch(0.2435 0 0);
+    --surface: oklch(0.995 0.004 42);
+    --surface-border: rgba(0, 0, 0, 0.08);
     --popover: oklch(0.9911 0 0);
     --popover-foreground: oklch(0.2435 0 0);
     --primary: oklch(0.4347 0.0547 42.0662);
@@ -198,11 +222,17 @@
   }
 
   .theme-pink-galore.dark {
-    --background: oklch(0.1822 0 0);
+    --background: oklch(0.22 0.012 330);
+    --background-from: oklch(0.18 0.02 320);
+    --background-to: oklch(0.28 0.03 25);
+    --background-highlight: rgba(255, 255, 255, 0.05);
+    --background-shadow: rgba(0, 0, 0, 0.4);
     --foreground: oklch(0.9461 0 0);
-    --card: oklch(0.2178 0 0);
+    --card: oklch(0.28 0.015 330);
     --card-foreground: oklch(0.9491 0 0);
-    --popover: oklch(0.2178 0 0);
+    --surface: oklch(0.28 0.015 330);
+    --surface-border: rgba(255, 255, 255, 0.09);
+    --popover: oklch(0.28 0.015 330);
     --popover-foreground: oklch(0.9491 0 0);
     --primary: oklch(0.8546 0.117 334.7771);
     --primary-foreground: oklch(0.2174 0.0841 327.9991);
@@ -214,8 +244,8 @@
     --accent-foreground: oklch(0.9461 0 0);
     --destructive: oklch(0.6533 0.2343 32.6348);
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.2205 0.0278 329.3012);
-    --input: oklch(0.3979 0 0);
+    --border: rgba(255, 255, 255, 0.09);
+    --input: rgba(255, 255, 255, 0.06);
     --ring: oklch(0.8839 0.0945 332.7264);
     --chart-1: oklch(0.8839 0.0945 332.7264);
     --chart-2: oklch(0.3008 0.0465 333.0645);
@@ -257,11 +287,28 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
     letter-spacing: var(--tracking-normal);
   }
 
   html {
     @apply font-sans;
+  }
+}
+
+@layer utilities {
+  .bg-card-surface {
+    background-color: color-mix(in srgb, var(--surface) 70%, transparent);
+    border: 1px solid var(--surface-border);
+  }
+
+  .bg-header-surface {
+    background-color: color-mix(in srgb, var(--surface) 66%, transparent);
+    border-color: var(--surface-border);
+  }
+
+  .backdrop-surface {
+    -webkit-backdrop-filter: blur(24px) saturate(1.15);
+    backdrop-filter: blur(24px) saturate(1.15);
   }
 }

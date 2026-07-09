@@ -8,7 +8,7 @@ import type {
   WeeklyMealPlanEntryInput,
   WeeklyMealInput,
 } from '@calorie-tracker/shared';
-import { macroCaloriesError } from '@calorie-tracker/shared';
+import { macroCaloriesError, isLogOnCalendarDate, getClientTimeZone } from '@calorie-tracker/shared';
 import type { ApiClient } from './api-client';
 import type { LocalDatabase } from './types';
 import type { SyncEngine } from './sync';
@@ -593,7 +593,8 @@ export function createLocalStore(api: ApiClient, db: LocalDatabase, sync: SyncEn
 
   async function localGetFoodLogs(userId: string, date: string) {
     const rows = await db.getFoodLogEntries(userId);
-    return rows.filter((row) => row.loggedAt.slice(0, 10) === date);
+    const timeZone = getClientTimeZone();
+    return rows.filter((row) => isLogOnCalendarDate(row.loggedAt, date, timeZone));
   }
 
   return {

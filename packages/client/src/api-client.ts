@@ -1,5 +1,7 @@
 import type { TokenStorage } from './types';
 import type { AdminUser, CreateInvitationResponse, Invitation, User, UserRole } from '@calorie-tracker/shared';
+import { getClientTimeZone } from '@calorie-tracker/shared';
+import { ApiError, parseApiError } from './api-error';
 
 type RequestOptions = {
   method?: string;
@@ -82,6 +84,7 @@ export class ApiClient {
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'X-User-Timezone': getClientTimeZone(),
     };
 
     if (options.auth !== false && this.accessToken) {
@@ -102,8 +105,9 @@ export class ApiClient {
     }
 
     if (!res.ok) {
-      const error = await res.text();
-      throw new Error(error || `Request failed: ${res.status}`);
+      const errorText = await res.text();
+      const message = parseApiError(errorText, res.status);
+      throw new ApiError(message, res.status);
     }
 
     if (res.status === 204) return undefined as T;
@@ -321,6 +325,13 @@ export class ApiClient {
 
   materializeFoodLogsFromPlan(date: string) {
     return this.request('/food-logs/materialize-from-plan', { method: 'POST', body: { date } });
+  }
+
+  syncFutureFoodLogsFromWeeklyTemplate(dayOfWeek: number) {
+    return this.request('/food-logs/sync-future-from-weekly', {
+      method: 'POST',
+      body: { dayOfWeek },
+    });
   }
 
   confirmFoodLog(id: string) {

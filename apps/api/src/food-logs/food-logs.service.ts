@@ -1,25 +1,32 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm';
+import { and, eq, gte, isNull, lt } from 'drizzle-orm';
 import {
   dailyLogMaterializations,
   dayMeals,
   foodLogEntries,
+  weeklyMealPlanEntries,
   weeklyMeals,
   type DbClient,
 } from '@calorie-tracker/db';
 import type { EffectiveMealPlan, FoodLogEntryInput } from '@calorie-tracker/shared';
 import {
   dayOfWeekFromDate,
+  formatDateInTimeZone,
+  localDayBoundsUtc,
   loggedAtForDate,
   mealRefFromEffectiveMeal,
   resolveEffectiveMealPlan,
+  todayDateString,
+  upcomingDatesForWeekday,
 } from '@calorie-tracker/shared';
 import { DB } from '../database/database.module';
-import { serializeFoodLogEntry, toDateString } from '../common/serializers';
+import { serializeFoodLogEntry } from '../common/serializers';
 import { MealPlansService } from '../meal-plans/meal-plans.service';
 import { WeeklyMealPlansService } from '../meal-plans/weekly-meal-plans.service';
 import { WeeklyMealsService } from '../meal-plans/weekly-meals.service';
 import { DayMealsService } from '../meal-plans/day-meals.service';
+
+type SerializedFoodLog = ReturnType<typeof serializeFoodLogEntry>;
 
 @Injectable()
 export class FoodLogsService {
@@ -31,50 +38,30 @@ export class FoodLogsService {
     private readonly dayMealsService: DayMealsService,
   ) {}
 
-  private utcDayBounds(date: string) {
+  private dayBounds(date: string, timeZone: string) {
+    const { start, end } = localDayBoundsUtc(date, timeZone);
     return {
-      start: new Date(`${date}T00:00:00.000Z`),
-      end: new Date(`${date}T23:59:59.999Z`),
+      start,
+      endExclusive: new Date(end.getTime() + 1),
     };
   }
 
-  async findByDate(userId: string, date: string) {
-    const { start, end } = this.utcDayBounds(date);
-    const dayOfWeek = dayOfWeekFromDate(date);
-
-    const [weeklyMealsList, dayMealsList] = await Promise.all([
-      this.weeklyMealsService.findAll(userId, dayOfWeek),
-      this.dayMealsService.findByDate(userId, date),
-    ]);
-
-    const weeklyMealIds = weeklyMealsList.map((meal) => meal.id);
-    const dayMealIds = dayMealsList.map((meal) => meal.id);
-
-    const dateRange = and(
-      gte(foodLogEntries.loggedAt, start),
-      lt(foodLogEntries.loggedAt, new Date(end.getTime() + 1)),
-    );
-
-    const scopeConditions = [dateRange];
-    if (weeklyMealIds.length > 0) {
-      scopeConditions.push(inArray(foodLogEntries.weeklyMealId, weeklyMealIds));
-    }
-    if (dayMealIds.length > 0) {
-      scopeConditions.push(inArray(foodLogEntries.dayMealId, dayMealIds));
-    }
+  async findByDate(userId: string, date: string, timeZone: string) {
+    const { start, endExclusive } = this.dayBounds(date, timeZone);
 
     const rows = await this.db.query.foodLogEntries.findMany({
       where: and(
         eq(foodLogEntries.userId, userId),
         isNull(foodLogEntries.deletedAt),
-        or(...scopeConditions),
+        gte(foodLogEntries.loggedAt, start),
+        lt(foodLogEntries.loggedAt, endExclusive),
       ),
     });
     return rows.map(serializeFoodLogEntry);
   }
 
-  private async validateMealRef(userId: string, input: FoodLogEntryInput) {
-    const logDate = toDateString(input.loggedAt);
+  private async validateMealRef(userId: string, input: FoodLogEntryInput, timeZone: string) {
+    const logDate = formatDateInTimeZone(new Date(input.loggedAt), timeZone);
 
     if (input.dayMealId) {
       const meal = await this.db.query.dayMeals.findFirst({
@@ -85,7 +72,8 @@ export class FoodLogsService {
         ),
       });
       if (!meal) throw new NotFoundException('Day meal not found');
-      if (toDateString(meal.planDate) !== logDate) {
+      const planDate = formatDateInTimeZone(new Date(meal.planDate), timeZone);
+      if (planDate !== logDate) {
         throw new BadRequestException('Day meal does not match log date');
       }
       return;
@@ -106,8 +94,9 @@ export class FoodLogsService {
     }
   }
 
-  async create(userId: string, input: FoodLogEntryInput, id?: string) {
-    await this.validateMealRef(userId, input);
+  async create(userId: string, input: FoodLogEntryInput, id?: string, timeZone?: string) {
+    const tz = timeZone ?? 'America/Los_Angeles';
+    await this.validateMealRef(userId, input, tz);
 
     const [row] = await this.db
       .insert(foodLogEntries)
@@ -126,7 +115,13 @@ export class FoodLogsService {
     return serializeFoodLogEntry(row);
   }
 
-  async update(userId: string, id: string, input: Partial<FoodLogEntryInput>) {
+  async update(
+    userId: string,
+    id: string,
+    input: Partial<FoodLogEntryInput>,
+    timeZone?: string,
+  ) {
+    const tz = timeZone ?? 'America/Los_Angeles';
     const existing = await this.db.query.foodLogEntries.findFirst({
       where: and(
         eq(foodLogEntries.id, id),
@@ -146,7 +141,7 @@ export class FoodLogsService {
       status: input.status ?? existing.status,
     };
 
-    await this.validateMealRef(userId, merged);
+    await this.validateMealRef(userId, merged, tz);
 
     const [row] = await this.db
       .update(foodLogEntries)
@@ -165,8 +160,8 @@ export class FoodLogsService {
     return serializeFoodLogEntry(row);
   }
 
-  async confirm(userId: string, id: string) {
-    return this.update(userId, id, { status: 'confirmed' });
+  async confirm(userId: string, id: string, timeZone?: string) {
+    return this.update(userId, id, { status: 'confirmed' }, timeZone);
   }
 
   async remove(userId: string, id: string) {
@@ -209,15 +204,22 @@ export class FoodLogsService {
     );
   }
 
+  private async hasDayOverride(userId: string, date: string) {
+    const [dayMealsList, datePlanEntries] = await Promise.all([
+      this.dayMealsService.findByDate(userId, date),
+      this.mealPlansService.findByDate(userId, date),
+    ]);
+    return dayMealsList.length > 0 || datePlanEntries.length > 0;
+  }
+
   private async syncMissingFromPlan(
     userId: string,
     date: string,
     effectivePlan: EffectiveMealPlan,
-    existingLogs: Awaited<ReturnType<typeof this.findByDate>>,
+    existingLogs: SerializedFoodLog[],
+    timeZone: string,
   ) {
-    const existingKeys = new Set(
-      existingLogs.map((log) => this.logKey(log)),
-    );
+    const existingKeys = new Set(existingLogs.map((log) => this.logKey(log)));
 
     const created = [];
     for (const meal of effectivePlan.meals) {
@@ -231,14 +233,19 @@ export class FoodLogsService {
         if (existingKeys.has(key)) continue;
 
         created.push(
-          await this.create(userId, {
-            loggedAt: loggedAtForDate(date, meal.mealTime),
-            ...mealRef,
-            foodId: entry.foodId,
-            quantity: entry.quantity,
-            unit: entry.unit,
-            status: 'pending',
-          }),
+          await this.create(
+            userId,
+            {
+              loggedAt: loggedAtForDate(date, meal.mealTime, timeZone),
+              ...mealRef,
+              foodId: entry.foodId,
+              quantity: entry.quantity,
+              unit: entry.unit,
+              status: 'pending',
+            },
+            undefined,
+            timeZone,
+          ),
         );
         existingKeys.add(key);
       }
@@ -247,11 +254,56 @@ export class FoodLogsService {
     return created;
   }
 
-  async materializeFromPlan(userId: string, date: string) {
-    const effectivePlan = await this.getEffectivePlanForDate(userId, date);
-    let existingLogs = await this.findByDate(userId, date);
+  private async syncPendingLogsFromPlan(
+    userId: string,
+    date: string,
+    effectivePlan: EffectiveMealPlan,
+    existingLogs: SerializedFoodLog[],
+    timeZone: string,
+  ) {
+    const planEntries = effectivePlan.meals.flatMap((meal) => {
+      const mealRef = mealRefFromEffectiveMeal(meal);
+      return meal.entries.map((entry) => ({
+        key: this.logKey(
+          { foodId: entry.foodId, ...mealRef },
+          mealRef.weeklyMealId,
+          mealRef.dayMealId,
+        ),
+        entry,
+      }));
+    });
+    const planByKey = new Map(planEntries.map((row) => [row.key, row.entry]));
 
-    await this.syncMissingFromPlan(userId, date, effectivePlan, existingLogs);
+    for (const log of existingLogs) {
+      if (log.status !== 'pending') continue;
+
+      const key = this.logKey(log);
+      const planEntry = planByKey.get(key);
+      if (!planEntry) {
+        await this.remove(userId, log.id);
+        continue;
+      }
+
+      if (log.quantity !== planEntry.quantity) {
+        await this.update(userId, log.id, { quantity: planEntry.quantity }, timeZone);
+      }
+    }
+
+    const refreshedLogs = await this.findByDate(userId, date, timeZone);
+    await this.syncMissingFromPlan(userId, date, effectivePlan, refreshedLogs, timeZone);
+    return this.findByDate(userId, date, timeZone);
+  }
+
+  async materializeFromPlan(userId: string, date: string, timeZone: string) {
+    const effectivePlan = await this.getEffectivePlanForDate(userId, date);
+    const existingLogs = await this.findByDate(userId, date, timeZone);
+    const today = todayDateString(timeZone);
+
+    if (effectivePlan.source === 'override' || date < today) {
+      await this.syncMissingFromPlan(userId, date, effectivePlan, existingLogs, timeZone);
+    } else {
+      await this.syncPendingLogsFromPlan(userId, date, effectivePlan, existingLogs, timeZone);
+    }
 
     const existingMaterialization = await this.db.query.dailyLogMaterializations.findFirst({
       where: and(
@@ -260,13 +312,46 @@ export class FoodLogsService {
       ),
     });
 
-    if (!existingMaterialization && (effectivePlan.meals.length > 0 || existingLogs.length > 0)) {
+    if (!existingMaterialization && effectivePlan.meals.length > 0) {
       await this.db.insert(dailyLogMaterializations).values({
         userId,
         planDate: date,
       });
     }
 
-    return this.findByDate(userId, date);
+    return this.findByDate(userId, date, timeZone);
+  }
+
+  async getDayOfWeekForWeeklyMealPlanEntry(userId: string, entryId: string) {
+    const entry = await this.db.query.weeklyMealPlanEntries.findFirst({
+      where: and(
+        eq(weeklyMealPlanEntries.id, entryId),
+        eq(weeklyMealPlanEntries.userId, userId),
+      ),
+      columns: { weeklyMealId: true },
+    });
+    if (!entry) return null;
+
+    const meal = await this.db.query.weeklyMeals.findFirst({
+      where: eq(weeklyMeals.id, entry.weeklyMealId),
+      columns: { dayOfWeek: true },
+    });
+    return meal?.dayOfWeek ?? null;
+  }
+
+  async syncFutureDaysFromWeeklyTemplate(userId: string, dayOfWeek: number, timeZone: string) {
+    const today = todayDateString(timeZone);
+    const dates = upcomingDatesForWeekday(dayOfWeek as 0 | 1 | 2 | 3 | 4 | 5 | 6, today);
+
+    for (const date of dates) {
+      if (await this.hasDayOverride(userId, date)) continue;
+      await this.materializeFromPlan(userId, date, timeZone);
+    }
+  }
+
+  async syncFutureDaysForWeeklyMealPlanEntry(userId: string, entryId: string, timeZone: string) {
+    const dayOfWeek = await this.getDayOfWeekForWeeklyMealPlanEntry(userId, entryId);
+    if (dayOfWeek === null) return;
+    await this.syncFutureDaysFromWeeklyTemplate(userId, dayOfWeek, timeZone);
   }
 }

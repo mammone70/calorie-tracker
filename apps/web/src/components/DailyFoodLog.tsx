@@ -6,6 +6,7 @@ import {
   dayOfWeekFromDate,
   defaultMealName,
   formatMealTime,
+  getClientTimeZone,
   groupFoodLogsByMeal,
   loggedAtForDate,
   mealRefFromEffectiveMeal,
@@ -150,6 +151,43 @@ export function DailyFoodLog({
     });
   };
 
+  const confirmMeal = async (mealLogs: FoodLogEntry[]) => {
+    const pending = mealLogs.filter((log) => log.status === 'pending');
+    if (pending.length === 0) return;
+
+    setSaving(true);
+    setMessage('');
+    try {
+      const userId = api.getUserId();
+      for (const log of pending) {
+        const raw = draftQuantities[log.id];
+        const qty = Number(raw);
+        if (Number.isFinite(qty) && qty > 0 && qty !== log.quantity) {
+          if (userId) {
+            await localStore.localUpdateFoodLog(userId, log.id, { quantity: qty });
+          } else {
+            await api.updateFoodLog(log.id, { quantity: qty });
+          }
+        }
+
+        if (userId) {
+          await localStore.localConfirmFoodLog(userId, log.id);
+        } else {
+          await api.confirmFoodLog(log.id);
+        }
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['food-logs', date] });
+      setMessage('Meal confirmed');
+      setMessageIsError(false);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Something went wrong');
+      setMessageIsError(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const confirmAll = async () => {
     const pending = logs.filter((log) => !log.deletedAt && log.status === 'pending');
     setSaving(true);
@@ -210,7 +248,7 @@ export function DailyFoodLog({
     try {
       const userId = api.getUserId();
       const input = {
-        loggedAt: loggedAtForDate(date, meal.mealTime),
+        loggedAt: loggedAtForDate(date, meal.mealTime, getClientTimeZone()),
         ...mealRefFromEffectiveMeal(meal),
         foodId,
         quantity: qty,
@@ -272,6 +310,7 @@ export function DailyFoodLog({
 
       <div className="space-y-4">
         {grouped.map((meal) => {
+          const mealPendingCount = meal.logs.filter((log) => log.status === 'pending').length;
           const mealNutrients = sumNutrients(
             meal.logs.map((log) => {
               const food = foodsMap.get(log.foodId);
@@ -281,15 +320,29 @@ export function DailyFoodLog({
 
           return (
           <Card key={meal.id}>
-            <CardHeader className="flex-row items-start justify-between space-y-0 pb-2">
-              <div className="min-w-0">
-                <CardTitle className="text-base">{meal.name}</CardTitle>
-                {meal.logs.length > 0 && <NutrientsSummary nutrients={mealNutrients} className="mt-1" />}
+            <CardHeader className="space-y-2 pb-2">
+              <div className="flex flex-row items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <CardTitle className="text-base">{meal.name}</CardTitle>
+                  {meal.logs.length > 0 && (
+                    <NutrientsSummary nutrients={mealNutrients} className="mt-1" />
+                  )}
+                </div>
+                {formatMealTime(meal.mealTime) && (
+                  <span className="shrink-0 text-sm text-muted-foreground">
+                    {formatMealTime(meal.mealTime)}
+                  </span>
+                )}
               </div>
-              {formatMealTime(meal.mealTime) && (
-                <span className="shrink-0 text-sm text-muted-foreground">
-                  {formatMealTime(meal.mealTime)}
-                </span>
+              {mealPendingCount > 0 && (
+                <Button
+                  className="w-full"
+                  size="sm"
+                  onClick={() => void confirmMeal(meal.logs)}
+                  disabled={saving}
+                >
+                  Confirm meal ({mealPendingCount})
+                </Button>
               )}
             </CardHeader>
             <CardContent className="space-y-2">

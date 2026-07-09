@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 type Nutrients = { calories: number; protein: number; fat: number; carbs: number };
 
 type MacroProgressProps = {
-  label: string;
+  label?: string;
   consumed: Nutrients;
   target: Nutrients;
   compact?: boolean;
@@ -69,8 +69,8 @@ export function MacroProgress({
   if (compact) {
     return (
       <div className={cn('space-y-2', className)}>
-        <p className="text-xs font-semibold text-muted-foreground">{label}</p>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+        {label ? <p className="text-xs font-semibold text-muted-foreground">{label}</p> : null}
+        <div className="grid grid-cols-4 gap-2">
           <ProgressBar compact label="Cal" current={consumed.calories} goal={target.calories} />
           <ProgressBar compact label="P" current={consumed.protein} goal={target.protein} unit="g" />
           <ProgressBar compact label="F" current={consumed.fat} goal={target.fat} unit="g" />
@@ -83,7 +83,7 @@ export function MacroProgress({
   return (
     <Card className={cn('w-full', className)}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg">{label}</CardTitle>
+        {label ? <CardTitle className="text-lg">{label}</CardTitle> : null}
       </CardHeader>
       <CardContent>
         <ProgressBar label="Calories" current={consumed.calories} goal={target.calories} />

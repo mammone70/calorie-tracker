@@ -15,7 +15,7 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        'border-b border-border bg-background px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]',
+        'border-b border-border bg-header-surface backdrop-surface px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]',
         !embedded && 'sticky top-0 z-20 shadow-[0_4px_24px_rgba(0,0,0,0.35)]',
       )}
     >

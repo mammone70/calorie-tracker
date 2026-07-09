@@ -1,5 +1,6 @@
 import type { MacroTarget } from './schemas/macro-target';
 import type { EffectiveMacroTarget, WeeklyMacroTarget } from './schemas/weekly-macro-target';
+import { datesInRange, formatCalendarDate, parseCalendarDate } from './date-utils';
 
 export const WEEKDAYS = [
   'Monday',
@@ -15,18 +16,33 @@ export type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 /** 0 = Monday … 6 = Sunday */
 export function dayOfWeekFromDate(dateStr: string): WeekdayIndex {
-  const day = new Date(`${dateStr}T12:00:00`).getDay();
-  return (day === 0 ? 6 : day - 1) as WeekdayIndex;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const weekday = new Date(year, month - 1, day, 12, 0, 0, 0).getDay();
+  return (weekday === 0 ? 6 : weekday - 1) as WeekdayIndex;
 }
 
-export function datesInRange(from: string, to: string): string[] {
+export { datesInRange };
+
+export function upcomingDatesForWeekday(
+  dayOfWeek: WeekdayIndex,
+  fromDate: string,
+  maxDays = 365,
+): string[] {
   const dates: string[] = [];
-  const cur = new Date(`${from}T12:00:00`);
-  const end = new Date(`${to}T12:00:00`);
-  while (cur <= end) {
-    dates.push(cur.toISOString().slice(0, 10));
-    cur.setDate(cur.getDate() + 1);
+  let current = parseCalendarDate(fromDate);
+  const end = new Date(current);
+  end.setDate(end.getDate() + maxDays);
+
+  while (current <= end) {
+    const date = formatCalendarDate(current);
+    if (dayOfWeekFromDate(date) === dayOfWeek) {
+      dates.push(date);
+    }
+    const next = new Date(current);
+    next.setDate(next.getDate() + 1);
+    current = next;
   }
+
   return dates;
 }
 

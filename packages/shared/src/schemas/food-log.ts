@@ -58,5 +58,9 @@ export const materializeFoodLogsSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
+export const syncFutureFoodLogsSchema = z.object({
+  dayOfWeek: z.number().int().min(0).max(6),
+});
+
 export type FoodLogEntryInput = z.infer<typeof foodLogEntryInputSchema>;
 export type FoodLogEntry = z.infer<typeof foodLogEntrySchema>;

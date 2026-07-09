@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { MacroProgress } from '../components/MacroProgress';
-import { confirmedFoodLogs, formatNutrientsSummary } from '@calorie-tracker/shared';
+import { confirmedFoodLogs, formatHeaderDate, formatNutrientsSummary } from '@calorie-tracker/shared';
 import { DailyFoodLog, ensureWeeklyMealsForDate } from '../components/DailyFoodLog';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/client';
@@ -66,13 +66,14 @@ export function TodayPage() {
   };
 
   const macroLoading = targetsQuery.isLoading || logsQuery.isLoading || foodsQuery.isLoading;
+  const formattedToday = formatHeaderDate(today);
 
   return (
     <div>
-      <div className="sticky top-[calc(2.75rem+max(0.5rem,env(safe-area-inset-top,0px)))] z-20 border-b border-border bg-background shadow-[0_4px_16px_rgba(0,0,0,0.25)]">
+      <div className="sticky top-[calc(2.75rem+max(0.5rem,env(safe-area-inset-top,0px)))] z-20 border-b border-border bg-header-surface backdrop-surface shadow-[0_4px_16px_rgba(0,0,0,0.25)]">
         <div className="mx-auto w-full min-w-0 max-w-lg px-4 py-2">
           <div className="mb-2 flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-muted-foreground">{today}</p>
+            <p className="text-sm font-semibold">{formattedToday}</p>
             <Button variant="link" className="h-auto p-0 text-sm" onClick={() => void onRefresh()}>
               Refresh
             </Button>
@@ -83,7 +84,6 @@ export function TodayPage() {
           ) : hasTarget ? (
             <MacroProgress
               compact
-              label="Today's progress"
               consumed={consumed}
               target={{
                 calories: target!.calories,
@@ -94,7 +94,6 @@ export function TodayPage() {
             />
           ) : (
             <div className="space-y-1 text-xs">
-              <p className="font-semibold text-muted-foreground">Logged today</p>
               <p className="tabular-nums text-muted-foreground">{formatNutrientsSummary(consumed)}</p>
               <p className="text-muted-foreground">
                 No macro target set.{' '}

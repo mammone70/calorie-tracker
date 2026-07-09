@@ -1,4 +1,5 @@
 export * from './constants';
+export * from './date-utils';
 export * from './macro-calories';
 export * from './macro-target-utils';
 export * from './schemas/auth';

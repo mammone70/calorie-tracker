@@ -25,6 +25,7 @@ export function createCalorieTrackerClient(
 }
 
 export { ApiClient } from './api-client';
+export { ApiError, parseApiError } from './api-error';
 export { createSyncEngine } from './sync';
 export { createLocalStore } from './local-store';
 export { createHooks } from './hooks';

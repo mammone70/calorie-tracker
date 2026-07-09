@@ -1,3 +1,4 @@
+import { resolveTimeZone, zonedDateTimeToUtc } from './date-utils';
 import type { EffectiveMealBlock } from './schemas/weekly-meal-plan';
 import type { FoodLogEntry } from './schemas/food-log';
 
@@ -41,11 +42,15 @@ export function ungroupedFoodLogs(
   return logs.filter((log) => !log.deletedAt && !groupedIds.has(log.id));
 }
 
-/** Store meal time on the plan date in UTC so findByDate (UTC day bounds) stays consistent. */
-export function loggedAtForDate(date: string, mealTime?: string | null): string {
+/** Store meal time on the plan date in the user's local timezone. */
+export function loggedAtForDate(
+  date: string,
+  mealTime?: string | null,
+  timeZone?: string,
+): string {
   const time = mealTime ?? '12:00';
-  return `${date}T${time}:00.000Z`;
+  return zonedDateTimeToUtc(date, `${time}:00`, resolveTimeZone(timeZone)).toISOString();
 }
-export function confirmedFoodLogs(logs: FoodLogEntry[]): FoodLogEntry[] {
-  return logs.filter((log) => !log.deletedAt && log.status === 'confirmed');
+
+export function confirmedFoodLogs(logs: FoodLogEntry[]): FoodLogEntry[] {  return logs.filter((log) => !log.deletedAt && log.status === 'confirmed');
 }

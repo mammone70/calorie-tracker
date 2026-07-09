@@ -394,7 +394,7 @@ export function WeeklyMealPlansPage({
 
   return (
     <div>
-      <div className="sticky top-0 z-30 bg-background shadow-[0_4px_24px_rgba(0,0,0,0.35)]">
+      <div className="sticky top-0 z-30 bg-header-surface backdrop-surface shadow-[0_4px_24px_rgba(0,0,0,0.35)]">
         <PageHeader embedded title={title} backTo={backTo} />
         <div className="mx-auto w-full min-w-0 max-w-lg border-b border-border px-4 py-2">
           <div className="flex gap-1 overflow-x-auto pb-2">

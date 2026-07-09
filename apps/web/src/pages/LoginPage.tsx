@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { inputFieldClass } from '@/lib/utils';
+import { showError, showErrorFromUnknown } from '@/lib/toast';
 import { useAuth } from '../contexts/AuthContext';
 
 export function LoginPage() {
@@ -10,55 +14,72 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      setError('Please enter email and password');
+      showError('Please enter email and password');
       return;
     }
     setLoading(true);
-    setError('');
     try {
       await login(email, password);
       navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      showErrorFromUnknown(err, 'Sign in failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-dvh flex-col justify-center px-6 pt-safe-top pb-safe">
-      <h1 className="mb-2 text-3xl font-bold">Calorie Tracker</h1>
-      <p className="mb-8 text-muted-foreground">Sign in to sync your data</p>
+    <div className="flex min-h-dvh items-center justify-center px-4 py-8 pt-safe-top pb-safe">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle className="text-xl">Calorie Tracker</CardTitle>
+          <CardDescription>Sign in to sync your data</CardDescription>
+        </CardHeader>
 
-      <form onSubmit={handleLogin} className="space-y-3">
-        <Input
-          placeholder="Email"
-          type="email"
-          autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <Input
-          placeholder="Password"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" className="mt-2 w-full" size="lg" disabled={loading}>
-          {loading ? 'Signing in…' : 'Sign In'}
-        </Button>
-      </form>
+        <CardContent>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="login-email">Email</Label>
+              <Input
+                id="login-email"
+                className={inputFieldClass}
+                placeholder="you@example.com"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
 
-      <Button variant="link" className="mt-6 w-full" asChild>
-        <Link to="/register">Create an account</Link>
-      </Button>
+            <div className="space-y-2">
+              <Label htmlFor="login-password">Password</Label>
+              <Input
+                id="login-password"
+                className={inputFieldClass}
+                placeholder="••••••••"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+
+            <Button type="submit" className="w-full" size="lg" disabled={loading}>
+              {loading ? 'Signing in…' : 'Sign In'}
+            </Button>
+          </form>
+        </CardContent>
+
+        <CardFooter className="justify-center border-t-0 pt-0">
+          <Button variant="link" className="h-auto p-0" asChild>
+            <Link to="/register">Create an account</Link>
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 }

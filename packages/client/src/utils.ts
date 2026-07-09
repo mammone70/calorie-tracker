@@ -1,10 +1,14 @@
+import { getClientTimeZone, todayDateString as todayInTimeZone, formatDateInTimeZone } from '@calorie-tracker/shared';
+
 export function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
+  return todayInTimeZone(getClientTimeZone());
 }
 
 export function formatDate(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return formatDateInTimeZone(date, getClientTimeZone());
 }
+
+export { getClientTimeZone } from '@calorie-tracker/shared';
 
 export function computeNutrients(
   nutrientsPer100g: { calories: number; protein: number; fat: number; carbs: number },
