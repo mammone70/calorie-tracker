@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { Check, ChevronDown, Loader2, Minus, X } from 'lucide-react';
 import {
   DEFAULT_MEAL_COUNT,
   dayOfWeekFromDate,
@@ -29,6 +30,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn, inputFieldClass } from '@/lib/utils';
+import { showErrorFromUnknown, showSuccess } from '@/lib/toast';
 import { nutrientsForQuantity, sumNutrients } from '@calorie-tracker/client';
 import { NutrientsSummary, FoodAmountNutrients } from './NutrientsSummary';
 import { FoodPicker } from './FoodPicker';
@@ -66,6 +68,8 @@ export function DailyFoodLog({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [messageIsError, setMessageIsError] = useState(false);
+  const [busyLogIds, setBusyLogIds] = useState<Record<string, boolean>>({});
+  const [collapsedMeals, setCollapsedMeals] = useState<Record<string, boolean>>({});
 
   const foodsQuery = useQuery({
     queryKey: ['foods'],
@@ -108,6 +112,23 @@ export function DailyFoodLog({
     }
   }, [meals, activeMealId]);
 
+  const setLogBusy = (id: string, busy: boolean) => {
+    setBusyLogIds((prev) => {
+      if (busy) return { ...prev, [id]: true };
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const patchFoodLogsCache = (updater: (logs: FoodLogEntry[]) => FoodLogEntry[]) => {
+    const previous = queryClient.getQueryData<FoodLogEntry[]>(['food-logs', date]);
+    queryClient.setQueryData<FoodLogEntry[]>(['food-logs', date], (current) =>
+      updater(current ?? []),
+    );
+    return previous;
+  };
+
   const runMutation = async (fn: () => Promise<unknown>) => {
     setMessage('');
     try {
@@ -140,15 +161,73 @@ export function DailyFoodLog({
     });
   };
 
-  const confirmLog = async (id: string) => {
-    const userId = api.getUserId();
-    await runMutation(async () => {
+  const confirmLog = async (id: string, { toast = true }: { toast?: boolean } = {}) => {
+    const previous = patchFoodLogsCache((current) =>
+      current.map((log) => (log.id === id ? { ...log, status: 'confirmed' as const } : log)),
+    );
+    setLogBusy(id, true);
+    try {
+      const userId = api.getUserId();
       if (userId) {
         await localStore.localConfirmFoodLog(userId, id);
       } else {
         await api.confirmFoodLog(id);
       }
-    });
+      if (toast) showSuccess('Confirmed');
+      await queryClient.invalidateQueries({ queryKey: ['food-logs', date] });
+    } catch (error) {
+      if (previous) queryClient.setQueryData(['food-logs', date], previous);
+      showErrorFromUnknown(error);
+      throw error;
+    } finally {
+      setLogBusy(id, false);
+    }
+  };
+
+  const unconfirmLog = async (id: string) => {
+    const previous = patchFoodLogsCache((current) =>
+      current.map((log) => (log.id === id ? { ...log, status: 'pending' as const } : log)),
+    );
+    setLogBusy(id, true);
+    try {
+      const userId = api.getUserId();
+      if (userId) {
+        await localStore.localUnconfirmFoodLog(userId, id);
+      } else {
+        await api.updateFoodLog(id, { status: 'pending' });
+      }
+      showSuccess('Unconfirmed');
+      await queryClient.invalidateQueries({ queryKey: ['food-logs', date] });
+    } catch (error) {
+      if (previous) queryClient.setQueryData(['food-logs', date], previous);
+      showErrorFromUnknown(error);
+    } finally {
+      setLogBusy(id, false);
+    }
+  };
+
+  const removeLog = async (id: string) => {
+    const previous = patchFoodLogsCache((current) =>
+      current.map((log) =>
+        log.id === id ? { ...log, deletedAt: new Date().toISOString() } : log,
+      ),
+    );
+    setLogBusy(id, true);
+    try {
+      const userId = api.getUserId();
+      if (userId) {
+        await localStore.localRemoveFoodLog(userId, id);
+      } else {
+        await api.deleteFoodLog(id);
+      }
+      showSuccess('Removed');
+      await queryClient.invalidateQueries({ queryKey: ['food-logs', date] });
+    } catch (error) {
+      if (previous) queryClient.setQueryData(['food-logs', date], previous);
+      showErrorFromUnknown(error);
+    } finally {
+      setLogBusy(id, false);
+    }
   };
 
   const confirmMeal = async (mealLogs: FoodLogEntry[]) => {
@@ -170,19 +249,13 @@ export function DailyFoodLog({
           }
         }
 
-        if (userId) {
-          await localStore.localConfirmFoodLog(userId, log.id);
-        } else {
-          await api.confirmFoodLog(log.id);
-        }
+        await confirmLog(log.id, { toast: false });
       }
 
+      showSuccess('Meal confirmed');
       await queryClient.invalidateQueries({ queryKey: ['food-logs', date] });
-      setMessage('Meal confirmed');
-      setMessageIsError(false);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Something went wrong');
-      setMessageIsError(true);
+      showErrorFromUnknown(error);
     } finally {
       setSaving(false);
     }
@@ -193,26 +266,14 @@ export function DailyFoodLog({
     setSaving(true);
     try {
       for (const log of pending) {
-        await confirmLog(log.id);
+        await confirmLog(log.id, { toast: false });
       }
-      setMessage('All foods confirmed');
-      setMessageIsError(false);
+      showSuccess('All foods confirmed');
     } catch {
-      // message set in runMutation
+      // error toast already shown in confirmLog
     } finally {
       setSaving(false);
     }
-  };
-
-  const removeLog = async (id: string) => {
-    const userId = api.getUserId();
-    await runMutation(async () => {
-      if (userId) {
-        await localStore.localRemoveFoodLog(userId, id);
-      } else {
-        await api.deleteFoodLog(id);
-      }
-    });
   };
 
   const selectMealForAdd = (meal: EffectiveMealBlock) => {
@@ -226,6 +287,15 @@ export function DailyFoodLog({
   const closeAddFoodDialog = () => {
     setAddFoodMealId('');
     setDialogError('');
+  };
+
+  const isMealCollapsed = (mealId: string) => collapsedMeals[mealId] ?? true;
+
+  const toggleMealCollapsed = (mealId: string) => {
+    setCollapsedMeals((prev) => ({
+      ...prev,
+      [mealId]: !(prev[mealId] ?? true),
+    }));
   };
 
   const addFoodMeal = meals.find((meal) => meal.id === addFoodMealId);
@@ -263,8 +333,7 @@ export function DailyFoodLog({
       }
 
       await queryClient.invalidateQueries({ queryKey: ['food-logs', date] });
-      setMessage('Food logged');
-      setMessageIsError(false);
+      showSuccess('Food logged');
       setQuantity('100');
       setFoodId('');
       closeAddFoodDialog();
@@ -317,116 +386,160 @@ export function DailyFoodLog({
               return nutrientsForQuantity(food, draftQuantities[log.id], log.quantity);
             }),
           );
+          const isCollapsed = isMealCollapsed(meal.id);
 
           return (
-          <Card key={meal.id}>
-            <CardHeader className="space-y-2 pb-2">
-              <div className="flex flex-row items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <CardTitle className="text-base">{meal.name}</CardTitle>
-                  {meal.logs.length > 0 && (
-                    <NutrientsSummary nutrients={mealNutrients} className="mt-1" />
-                  )}
-                </div>
-                {formatMealTime(meal.mealTime) && (
-                  <span className="shrink-0 text-sm text-muted-foreground">
-                    {formatMealTime(meal.mealTime)}
-                  </span>
-                )}
-              </div>
-              {mealPendingCount > 0 && (
-                <Button
-                  className="w-full"
-                  size="sm"
-                  onClick={() => void confirmMeal(meal.logs)}
-                  disabled={saving}
+            <Card key={meal.id}>
+              <CardHeader className="space-y-2 pb-2">
+                <button
+                  type="button"
+                  className="flex w-full flex-row items-start justify-between gap-2 text-left"
+                  onClick={() => toggleMealCollapsed(meal.id)}
+                  aria-expanded={!isCollapsed}
                 >
-                  Confirm meal ({mealPendingCount})
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {meal.logs.length === 0 ? (
-                <p className="text-sm italic text-muted-foreground">Nothing planned for this meal</p>
-              ) : (
-                <ul className="space-y-2">
-                  {meal.logs.map((log) => {
-                    const food = foodsMap.get(log.foodId);
-                    const isPending = log.status === 'pending';
-                    const itemNutrients = nutrientsForQuantity(
-                      food,
-                      draftQuantities[log.id],
-                      log.quantity,
-                    );
-                    return (
-                      <li
-                        key={log.id}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <ChevronDown
                         className={cn(
-                          'rounded-lg px-3 py-2',
-                          isPending ? 'border border-primary/30 bg-primary/5' : 'bg-muted/50',
+                          'size-4 shrink-0 text-muted-foreground transition-transform',
+                          isCollapsed && '-rotate-90',
                         )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium">{food?.name ?? 'Unknown food'}</p>
-                              {isPending && <Badge variant="secondary">Planned</Badge>}
-                            </div>
-                            <NutrientsSummary nutrients={itemNutrients} className="mt-0.5" />
-                            {isPending && (
-                              <p className="text-xs text-primary">Confirm when eaten</p>
+                      />
+                      <CardTitle className="text-base">{meal.name}</CardTitle>
+                    </div>
+                    {meal.logs.length > 0 && (
+                      <NutrientsSummary nutrients={mealNutrients} className="mt-1 pl-6" />
+                    )}
+                  </div>
+                  {formatMealTime(meal.mealTime) && (
+                    <span className="shrink-0 text-sm text-muted-foreground">
+                      {formatMealTime(meal.mealTime)}
+                    </span>
+                  )}
+                </button>
+                {!isCollapsed && mealPendingCount > 0 && (
+                  <Button
+                    className="w-full"
+                    size="sm"
+                    onClick={() => void confirmMeal(meal.logs)}
+                    disabled={saving}
+                  >
+                    Confirm meal ({mealPendingCount})
+                  </Button>
+                )}
+              </CardHeader>
+              {!isCollapsed && (
+                <CardContent className="space-y-2">
+                  {meal.logs.length === 0 ? (
+                    <p className="text-sm italic text-muted-foreground">
+                      Nothing planned for this meal
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {meal.logs.map((log, index) => {
+                        const food = foodsMap.get(log.foodId);
+                        const isPending = log.status === 'pending';
+                        const isBusy = !!busyLogIds[log.id];
+                        const itemNutrients = nutrientsForQuantity(
+                          food,
+                          draftQuantities[log.id],
+                          log.quantity,
+                        );
+                        return (
+                          <li
+                            key={log.id}
+                            className={cn(
+                              'rounded-lg border border-border px-3 py-2',
+                              index % 2 === 0 ? 'bg-background' : 'bg-accent',
+                              isPending && 'border-l-2 border-l-primary',
                             )}
-                            <div className="mt-2 flex items-center gap-2">
-                              <Input
-                                className={cn(inputFieldClass, 'w-24')}
-                                inputMode="decimal"
-                                value={draftQuantities[log.id] ?? String(log.quantity)}
-                                onChange={(e) =>
-                                  setDraftQuantities((prev) => ({
-                                    ...prev,
-                                    [log.id]: e.target.value,
-                                  }))
-                                }
-                                onBlur={() => void updateQuantity(log)}
-                              />
-                              <span className="text-sm text-muted-foreground">{log.unit}</span>
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium">{food?.name ?? 'Unknown food'}</p>
+                                  {isPending && <Badge variant="secondary">Planned</Badge>}
+                                </div>
+                                <NutrientsSummary nutrients={itemNutrients} className="mt-0.5" />
+                                {isPending && (
+                                  <p className="text-xs text-primary">Confirm when eaten</p>
+                                )}
+                                <div className="mt-2 flex items-center gap-2">
+                                  <Input
+                                    className={cn(inputFieldClass, 'w-24')}
+                                    inputMode="decimal"
+                                    value={draftQuantities[log.id] ?? String(log.quantity)}
+                                    onChange={(e) =>
+                                      setDraftQuantities((prev) => ({
+                                        ...prev,
+                                        [log.id]: e.target.value,
+                                      }))
+                                    }
+                                    onBlur={() => void updateQuantity(log)}
+                                    disabled={isBusy}
+                                  />
+                                  <span className="text-sm text-muted-foreground">{log.unit}</span>
+                                </div>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-1">
+                                {isBusy ? (
+                                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                                ) : (
+                                  <>
+                                    {isPending ? (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        className="text-green-600 hover:bg-green-600/10 hover:text-green-600"
+                                        aria-label="Confirm food"
+                                        onClick={() => void confirmLog(log.id)}
+                                      >
+                                        <Check className="size-4" />
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        className="text-muted-foreground hover:bg-muted"
+                                        aria-label="Unconfirm food"
+                                        onClick={() => void unconfirmLog(log.id)}
+                                      >
+                                        <X className="size-4" />
+                                      </Button>
+                                    )}
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                      aria-label="Remove food"
+                                      onClick={() => void removeLog(log.id)}
+                                    >
+                                      <Minus className="size-4" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex shrink-0 flex-col gap-1">
-                            {isPending && (
-                              <Button
-                                variant="link"
-                                className="h-auto p-0"
-                                onClick={() => void confirmLog(log.id)}
-                              >
-                                Confirm
-                              </Button>
-                            )}
-                            <Button
-                              variant="link"
-                              className="h-auto p-0 text-destructive"
-                              onClick={() => void removeLog(log.id)}
-                            >
-                              Remove
-                            </Button>
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  {showAddFood && (
+                    <Button
+                      variant="link"
+                      className="h-auto p-0"
+                      onClick={() => selectMealForAdd(meal)}
+                    >
+                      Add food to this meal
+                    </Button>
+                  )}
+                </CardContent>
               )}
-              {showAddFood && (
-                <Button
-                  variant="link"
-                  className="h-auto p-0"
-                  onClick={() => selectMealForAdd(meal)}
-                >
-                  Add food to this meal
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+            </Card>
           );
         })}
       </div>

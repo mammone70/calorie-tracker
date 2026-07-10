@@ -256,6 +256,10 @@ export function createLocalStore(api: ApiClient, db: LocalDatabase, sync: SyncEn
     return localUpdateFoodLog(userId, id, { status: 'confirmed' });
   }
 
+  async function localUnconfirmFoodLog(userId: string, id: string) {
+    return localUpdateFoodLog(userId, id, { status: 'pending' });
+  }
+
   async function localRemoveFoodLog(userId: string, id: string) {
     const now = new Date().toISOString();
 
@@ -613,6 +617,7 @@ export function createLocalStore(api: ApiClient, db: LocalDatabase, sync: SyncEn
     localCreateFoodLog,
     localUpdateFoodLog,
     localConfirmFoodLog,
+    localUnconfirmFoodLog,
     localRemoveFoodLog,
     localGetMacroTargets,
     localGetWeeklyMacroTargets,

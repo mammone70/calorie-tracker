@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { MacroProgress } from '../components/MacroProgress';
+import { Card, CardContent } from '@/components/ui/card';
+import { TodayProgress } from '../components/TodayProgress';
 import { confirmedFoodLogs, formatHeaderDate, formatNutrientsSummary } from '@calorie-tracker/shared';
 import { DailyFoodLog, ensureWeeklyMealsForDate } from '../components/DailyFoodLog';
 import { useAuth } from '../contexts/AuthContext';
@@ -69,32 +70,33 @@ export function TodayPage() {
   const formattedToday = formatHeaderDate(today);
 
   return (
-    <div>
-      <div className="sticky top-[calc(2.75rem+max(0.5rem,env(safe-area-inset-top,0px)))] z-20 border-b border-border bg-header-surface backdrop-surface shadow-[0_4px_16px_rgba(0,0,0,0.25)]">
-        <div className="mx-auto w-full min-w-0 max-w-lg px-4 py-2">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold">{formattedToday}</p>
-            <Button variant="link" className="h-auto p-0 text-sm" onClick={() => void onRefresh()}>
-              Refresh
-            </Button>
-          </div>
+    <div className="mx-auto w-full min-w-0 max-w-lg px-4 pb-4 pt-3">
+      <div className="mb-4 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold">{formattedToday}</p>
+          <Button variant="link" className="h-auto p-0 text-sm" onClick={() => void onRefresh()}>
+            Refresh
+          </Button>
+        </div>
 
-          {macroLoading ? (
-            <p className="text-xs text-muted-foreground">Loading progress…</p>
-          ) : hasTarget ? (
-            <MacroProgress
-              compact
-              consumed={consumed}
-              target={{
-                calories: target!.calories,
-                protein: target!.proteinG,
-                fat: target!.fatG,
-                carbs: target!.carbsG,
-              }}
-            />
-          ) : (
-            <div className="space-y-1 text-xs">
-              <p className="tabular-nums text-muted-foreground">{formatNutrientsSummary(consumed)}</p>
+        {macroLoading ? (
+          <p className="text-xs text-muted-foreground">Loading progress…</p>
+        ) : hasTarget ? (
+          <TodayProgress
+            consumed={consumed}
+            target={{
+              calories: target!.calories,
+              protein: target!.proteinG,
+              fat: target!.fatG,
+              carbs: target!.carbsG,
+            }}
+          />
+        ) : (
+          <Card>
+            <CardContent className="space-y-1 p-3 text-xs">
+              <p className="tabular-nums text-muted-foreground">
+                {formatNutrientsSummary(consumed)}
+              </p>
               <p className="text-muted-foreground">
                 No macro target set.{' '}
                 <Button variant="link" className="h-auto p-0 text-xs" asChild>
@@ -105,32 +107,30 @@ export function TodayPage() {
                   <Link to={`/day/${today}`}>Set for today</Link>
                 </Button>
               </p>
-            </div>
-          )}
-        </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      <div className="mx-auto w-full min-w-0 max-w-lg px-4 pb-4">
-        <section className="mt-4">
-          <h2 className="mb-1 text-lg font-bold">Today&apos;s meals</h2>
-          <p className="mb-3 text-sm text-muted-foreground">
-            Pre-filled from your meal plan. Confirm each food when you eat it — edit amounts or remove
-            anything that changed today.
-          </p>
-          <DailyFoodLog
-            date={today}
-            foodsMap={foodsMap}
-            logs={logsQuery.data ?? []}
-            meals={meals}
-            autoMaterialize
-            onMealsNeeded={setupMeals}
-          />
-        </section>
+      <section>
+        <h2 className="mb-1 text-lg font-bold">Today&apos;s meals</h2>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Pre-filled from your meal plan. Confirm each food when you eat it — edit amounts or remove
+          anything that changed today.
+        </p>
+        <DailyFoodLog
+          date={today}
+          foodsMap={foodsMap}
+          logs={logsQuery.data ?? []}
+          meals={meals}
+          autoMaterialize
+          onMealsNeeded={setupMeals}
+        />
+      </section>
 
-        <Button variant="outline" className="mt-4 w-full" size="lg" asChild>
-          <Link to={`/day/${today}`}>View full day details</Link>
-        </Button>
-      </div>
+      <Button variant="outline" className="mt-4 w-full" size="lg" asChild>
+        <Link to={`/day/${today}`}>View full day details</Link>
+      </Button>
     </div>
   );
 }
