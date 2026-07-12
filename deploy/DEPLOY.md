@@ -97,7 +97,7 @@ Then: `sudo systemctl restart sshd`
 
 ```bash
 sudo mkdir -p /opt/calorie-tracker/backups
-sudo chown deploy:deploy /opt/calorie-tracker
+sudo chown -R deploy:deploy /opt/calorie-tracker
 ```
 
 ### DNS
@@ -318,15 +318,25 @@ With the rsync-based deploy, rollback is typically: push an older tag again from
 
 ## 6. Database backups
 
-See [BACKUP.md](./BACKUP.md) for automated daily backups and restore procedures.
+See [BACKUP.md](./BACKUP.md) for daily `pg_dump` backups, Google Drive (rclone) offsite setup, retention, and restore.
 
-Quick setup:
+Quick timer setup:
 
 ```bash
 sudo cp deploy/systemd/calorie-tracker-backup.* /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now calorie-tracker-backup.timer
 ```
+
+Offsite (optional): as `deploy`, configure rclone (`gdrive` remote), then set in `.env`:
+
+```bash
+BACKUP_RETENTION_DAYS=7
+BACKUP_OFFSITE_RETENTION_DAYS=14
+RCLONE_REMOTE=gdrive:calorie-tracker-backups
+```
+
+Smoke-test as `deploy` (no sudo): `./deploy/scripts/backup-db.sh`. Full checklist is in BACKUP.md.
 
 ## 7. Security summary
 
