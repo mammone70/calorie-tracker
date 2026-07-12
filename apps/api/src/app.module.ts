@@ -7,6 +7,8 @@ import { MacroTargetsModule } from './macro-targets/macro-targets.module';
 import { FoodsModule } from './foods/foods.module';
 import { MealPlansModule } from './meal-plans/meal-plans.module';
 import { FoodLogsModule } from './food-logs/food-logs.module';
+import { ExercisesModule } from './exercises/exercises.module';
+import { WorkoutsModule } from './workouts/workouts.module';
 import { SyncModule } from './sync/sync.module';
 import { AdminModule } from './admin/admin.module';
 import { HealthController } from './health.controller';
@@ -26,6 +28,8 @@ import { HealthController } from './health.controller';
     FoodsModule,
     MealPlansModule,
     FoodLogsModule,
+    ExercisesModule,
+    WorkoutsModule,
     SyncModule,
     AdminModule,
   ],

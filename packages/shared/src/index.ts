@@ -14,4 +14,8 @@ export * from './schemas/day-meal';
 export * from './schemas/weekly-meal-plan';
 export * from './schemas/food-log';
 export * from './food-log-utils';
+export * from './schemas/exercise';
+export * from './schemas/workout-template';
+export * from './schemas/day-workout';
+export * from './workout-utils';
 export * from './schemas/sync';

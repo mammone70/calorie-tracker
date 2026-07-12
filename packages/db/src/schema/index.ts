@@ -11,6 +11,7 @@ import {
   pgEnum,
   uniqueIndex,
   smallint,
+  boolean,
 } from 'drizzle-orm/pg-core';
 
 export const mealSlotEnum = pgEnum('meal_slot', [
@@ -29,6 +30,10 @@ export const foodSourceEnum = pgEnum('food_source', [
 ]);
 
 export const userRoleEnum = pgEnum('user_role', ['client', 'admin']);
+
+export const workoutScheduleKindEnum = pgEnum('workout_schedule_kind', ['weekday', 'interval']);
+
+export const workoutSetStatusEnum = pgEnum('workout_set_status', ['pending', 'confirmed']);
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -234,6 +239,152 @@ export const dailyLogMaterializations = pgTable(
   ],
 );
 
+export const exercises = pgTable(
+  'exercises',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    notes: text('notes'),
+    isGlobal: boolean('is_global').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('exercises_global_name_active_idx')
+      .on(table.name)
+      .where(sql`is_global = true AND deleted_at IS NULL`),
+    uniqueIndex('exercises_user_name_active_idx')
+      .on(table.userId, table.name)
+      .where(sql`is_global = false AND deleted_at IS NULL`),
+  ],
+);
+
+export const workoutTemplates = pgTable('workout_templates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  scheduleKind: workoutScheduleKindEnum('schedule_kind').notNull(),
+  dayOfWeek: smallint('day_of_week'),
+  intervalDays: integer('interval_days'),
+  anchorDate: date('anchor_date'),
+  sortIndex: smallint('sort_index').notNull().default(0),
+  isActive: smallint('is_active').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+});
+
+export const workoutTemplateExercises = pgTable('workout_template_exercises', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  templateId: uuid('template_id')
+    .notNull()
+    .references(() => workoutTemplates.id, { onDelete: 'cascade' }),
+  exerciseId: uuid('exercise_id')
+    .notNull()
+    .references(() => exercises.id, { onDelete: 'cascade' }),
+  sortIndex: smallint('sort_index').notNull().default(0),
+  targetSets: smallint('target_sets').notNull(),
+  repsMin: integer('reps_min').notNull(),
+  repsMax: integer('reps_max').notNull(),
+  targetWeight: numeric('target_weight', { precision: 10, scale: 2 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+});
+
+export const dayWorkoutSessions = pgTable(
+  'day_workout_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    sessionDate: date('session_date').notNull(),
+    name: text('name').notNull(),
+    sortIndex: smallint('sort_index').notNull().default(0),
+    sourceTemplateId: uuid('source_template_id').references(() => workoutTemplates.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('day_workout_sessions_user_date_sort_idx')
+      .on(table.userId, table.sessionDate, table.sortIndex)
+      .where(sql`deleted_at IS NULL`),
+  ],
+);
+
+export const dayWorkoutExercises = pgTable('day_workout_exercises', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  sessionId: uuid('session_id')
+    .notNull()
+    .references(() => dayWorkoutSessions.id, { onDelete: 'cascade' }),
+  exerciseId: uuid('exercise_id')
+    .notNull()
+    .references(() => exercises.id, { onDelete: 'cascade' }),
+  sortIndex: smallint('sort_index').notNull().default(0),
+  targetSets: smallint('target_sets').notNull(),
+  repsMin: integer('reps_min').notNull(),
+  repsMax: integer('reps_max').notNull(),
+  targetWeight: numeric('target_weight', { precision: 10, scale: 2 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+});
+
+export const workoutSetLogs = pgTable('workout_set_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  dayExerciseId: uuid('day_exercise_id')
+    .notNull()
+    .references(() => dayWorkoutExercises.id, { onDelete: 'cascade' }),
+  setIndex: smallint('set_index').notNull(),
+  status: workoutSetStatusEnum('status').notNull().default('pending'),
+  targetRepsMin: integer('target_reps_min').notNull(),
+  targetRepsMax: integer('target_reps_max').notNull(),
+  targetWeight: numeric('target_weight', { precision: 10, scale: 2 }),
+  actualReps: integer('actual_reps'),
+  actualWeight: numeric('actual_weight', { precision: 10, scale: 2 }),
+  confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+});
+
+export const dailyWorkoutMaterializations = pgTable(
+  'daily_workout_materializations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    sessionDate: date('session_date').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('daily_workout_materializations_user_date_idx').on(
+      table.userId,
+      table.sessionDate,
+    ),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type Invitation = typeof invitations.$inferSelect;
 export type MacroTarget = typeof macroTargets.$inferSelect;
@@ -245,6 +396,13 @@ export type DayMeal = typeof dayMeals.$inferSelect;
 export type MealPlanEntry = typeof mealPlanEntries.$inferSelect;
 export type FoodLogEntry = typeof foodLogEntries.$inferSelect;
 export type DailyLogMaterialization = typeof dailyLogMaterializations.$inferSelect;
+export type Exercise = typeof exercises.$inferSelect;
+export type WorkoutTemplate = typeof workoutTemplates.$inferSelect;
+export type WorkoutTemplateExercise = typeof workoutTemplateExercises.$inferSelect;
+export type DayWorkoutSession = typeof dayWorkoutSessions.$inferSelect;
+export type DayWorkoutExercise = typeof dayWorkoutExercises.$inferSelect;
+export type WorkoutSetLog = typeof workoutSetLogs.$inferSelect;
+export type DailyWorkoutMaterialization = typeof dailyWorkoutMaterializations.$inferSelect;
 
 export const schema = {
   users,
@@ -259,4 +417,11 @@ export const schema = {
   mealPlanEntries,
   foodLogEntries,
   dailyLogMaterializations,
+  exercises,
+  workoutTemplates,
+  workoutTemplateExercises,
+  dayWorkoutSessions,
+  dayWorkoutExercises,
+  workoutSetLogs,
+  dailyWorkoutMaterializations,
 };

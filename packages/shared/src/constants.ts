@@ -10,6 +10,12 @@ export const DEFAULT_MEAL_COUNT = 3;
 export const FOOD_SOURCES = ['user', 'usda', 'open_food_facts'] as const;
 export type FoodSource = (typeof FOOD_SOURCES)[number];
 
+export const WORKOUT_SCHEDULE_KINDS = ['weekday', 'interval'] as const;
+export type WorkoutScheduleKind = (typeof WORKOUT_SCHEDULE_KINDS)[number];
+
+export const WORKOUT_SET_STATUSES = ['pending', 'confirmed'] as const;
+export type WorkoutSetStatus = (typeof WORKOUT_SET_STATUSES)[number];
+
 export const SYNC_ENTITY_TYPES = [
   'macro_targets',
   'weekly_macro_targets',
@@ -19,5 +25,7 @@ export const SYNC_ENTITY_TYPES = [
   'foods',
   'meal_plan_entries',
   'food_log_entries',
+  'exercises',
+  'workout_set_logs',
 ] as const;
 export type SyncEntityType = (typeof SYNC_ENTITY_TYPES)[number];

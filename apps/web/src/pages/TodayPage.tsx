@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { DayViewHeader } from '../components/DayViewHeader';
 import { TodayProgress } from '../components/TodayProgress';
+import { DailyWorkouts } from '../components/DailyWorkouts';
 import { confirmedFoodLogs, formatNutrientsSummary } from '@calorie-tracker/shared';
 import { DailyFoodLog, ensureWeeklyMealsForDate } from '../components/DailyFoodLog';
 import { useAuth } from '../contexts/AuthContext';
@@ -154,6 +155,11 @@ export function TodayPage() {
             autoMaterialize
             onMealsNeeded={setupMeals}
           />
+        </section>
+
+        <section className="mt-6">
+          <h2 className="mb-3 text-lg font-bold">Workouts</h2>
+          <DailyWorkouts date={selectedDate} />
         </section>
 
         <Button variant="outline" className="mt-4 w-full" size="lg" asChild>

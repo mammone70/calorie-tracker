@@ -13,6 +13,7 @@
     "db:up": "docker compose up -d",
     "db:migrate": "pnpm --filter @calorie-tracker/db migrate",
     "db:seed-foods": "pnpm --filter @calorie-tracker/db seed:foods",
+    "db:seed-exercises": "pnpm --filter @calorie-tracker/db seed:exercises",
     "db:seed-meal-plan": "pnpm --filter @calorie-tracker/db seed:meal-plan",
     "db:update-meal-times": "pnpm --filter @calorie-tracker/db update:meal-times",
     "db:studio": "pnpm --filter @calorie-tracker/db studio",

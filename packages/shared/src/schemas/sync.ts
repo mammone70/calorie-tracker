@@ -8,6 +8,8 @@ import { dayMealSchema } from './day-meal';
 import { weeklyMealPlanEntrySchema } from './weekly-meal-plan';
 import { mealPlanEntrySchema } from './meal-plan';
 import { foodLogEntrySchema } from './food-log';
+import { exerciseSchema } from './exercise';
+import { workoutSetLogSchema } from './day-workout';
 
 export const syncQuerySchema = z.object({
   since: z.string().datetime().optional(),
@@ -34,6 +36,8 @@ export const syncPullResponseSchema = z.object({
   foods: z.array(foodSchema),
   mealPlanEntries: z.array(mealPlanEntrySchema),
   foodLogEntries: z.array(foodLogEntrySchema),
+  exercises: z.array(exerciseSchema),
+  workoutSetLogs: z.array(workoutSetLogSchema),
   serverTime: z.string().datetime(),
 });
 

@@ -50,6 +50,20 @@
       "when": 1751328000000,
       "tag": "0007_invitations",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1751414400000,
+      "tag": "0008_workouts",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1751500800000,
+      "tag": "0009_exercise_global",
+      "breakpoints": true
     }
   ]
 }

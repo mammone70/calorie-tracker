@@ -396,6 +396,163 @@ export class ApiClient {
     return this.request(`/food-logs/${id}`, { method: 'DELETE' });
   }
 
+  getExercises(options: ForUserOptions = {}) {
+    return this.request(withForUserId('/exercises', options.forUserId));
+  }
+
+  searchExercises(q: string, options: ForUserOptions = {}) {
+    return this.request(
+      withForUserId(`/exercises/search?q=${encodeURIComponent(q)}`, options.forUserId),
+    );
+  }
+
+  createExercise(body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/exercises', options.forUserId), {
+      method: 'POST',
+      body,
+    });
+  }
+
+  updateExercise(id: string, body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/exercises/${id}`, options.forUserId), {
+      method: 'PATCH',
+      body,
+    });
+  }
+
+  deleteExercise(id: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/exercises/${id}`, options.forUserId), {
+      method: 'DELETE',
+    });
+  }
+
+  getWorkoutTemplates(options: ForUserOptions = {}) {
+    return this.request(withForUserId('/workout-templates', options.forUserId));
+  }
+
+  createWorkoutTemplate(body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/workout-templates', options.forUserId), {
+      method: 'POST',
+      body,
+    });
+  }
+
+  updateWorkoutTemplate(id: string, body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/workout-templates/${id}`, options.forUserId), {
+      method: 'PATCH',
+      body,
+    });
+  }
+
+  deleteWorkoutTemplate(id: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/workout-templates/${id}`, options.forUserId), {
+      method: 'DELETE',
+    });
+  }
+
+  getWorkoutTemplateExercises(templateId: string, options: ForUserOptions = {}) {
+    return this.request(
+      withForUserId(`/workout-templates/${templateId}/exercises`, options.forUserId),
+    );
+  }
+
+  addWorkoutTemplateExercise(templateId: string, body: unknown, options: ForUserOptions = {}) {
+    return this.request(
+      withForUserId(`/workout-templates/${templateId}/exercises`, options.forUserId),
+      { method: 'POST', body },
+    );
+  }
+
+  updateWorkoutTemplateExercise(id: string, body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/workout-template-exercises/${id}`, options.forUserId), {
+      method: 'PATCH',
+      body,
+    });
+  }
+
+  deleteWorkoutTemplateExercise(id: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/workout-template-exercises/${id}`, options.forUserId), {
+      method: 'DELETE',
+    });
+  }
+
+  getEffectiveWorkouts(date: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/workouts/effective?date=${date}`, options.forUserId));
+  }
+
+  materializeWorkouts(date: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/workouts/materialize', options.forUserId), {
+      method: 'POST',
+      body: { date },
+    });
+  }
+
+  resetWorkoutsToTemplate(date: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/workouts/reset-to-template', options.forUserId), {
+      method: 'POST',
+      body: { date },
+    });
+  }
+
+  createWorkoutSession(body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/workouts/sessions', options.forUserId), {
+      method: 'POST',
+      body,
+    });
+  }
+
+  deleteWorkoutSession(id: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/workouts/sessions/${id}`, options.forUserId), {
+      method: 'DELETE',
+    });
+  }
+
+  addDayWorkoutExercise(sessionId: string, body: unknown, options: ForUserOptions = {}) {
+    return this.request(
+      withForUserId(`/workouts/sessions/${sessionId}/exercises`, options.forUserId),
+      { method: 'POST', body },
+    );
+  }
+
+  deleteDayWorkoutExercise(id: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/workouts/day-exercises/${id}`, options.forUserId), {
+      method: 'DELETE',
+    });
+  }
+
+  addWorkoutSet(dayExerciseId: string, body: unknown = {}, options: ForUserOptions = {}) {
+    return this.request(
+      withForUserId(`/workouts/day-exercises/${dayExerciseId}/sets`, options.forUserId),
+      { method: 'POST', body },
+    );
+  }
+
+  updateWorkoutSet(id: string, body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/workout-sets/${id}`, options.forUserId), {
+      method: 'PATCH',
+      body,
+    });
+  }
+
+  confirmWorkoutSet(id: string, body: unknown = {}, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/workout-sets/${id}/confirm`, options.forUserId), {
+      method: 'POST',
+      body,
+    });
+  }
+
+  unconfirmWorkoutSet(id: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/workout-sets/${id}/unconfirm`, options.forUserId), {
+      method: 'POST',
+    });
+  }
+
+  deleteWorkoutSet(id: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/workout-sets/${id}`, options.forUserId), {
+      method: 'DELETE',
+    });
+  }
+
   syncPull(since?: string) {
     const query = since ? `?since=${encodeURIComponent(since)}` : '';
     return this.request(`/sync${query}`);

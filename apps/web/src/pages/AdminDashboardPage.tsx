@@ -87,7 +87,7 @@ export function AdminDashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Clients</CardTitle>
-            <CardDescription>Manage weekly targets and meal plans for each client</CardDescription>
+            <CardDescription>Manage targets, meal plans, and workouts for each client</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {usersQuery.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
@@ -108,6 +108,9 @@ export function AdminDashboardPage() {
                   </Button>
                   <Button variant="outline" size="sm" asChild>
                     <Link to={`/admin/clients/${client.id}/meal-plans`}>Meal plans</Link>
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={`/admin/clients/${client.id}/workouts`}>Workouts</Link>
                   </Button>
                 </div>
               </div>

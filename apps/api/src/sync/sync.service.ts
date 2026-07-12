@@ -9,6 +9,8 @@ import {
   foods,
   mealPlanEntries,
   foodLogEntries,
+  exercises,
+  workoutSetLogs,
   type DbClient,
 } from '@calorie-tracker/db';
 import type { SyncPushInput } from '@calorie-tracker/shared';
@@ -23,6 +25,7 @@ import {
   serializeMealPlanEntry,
   serializeFoodLogEntry,
 } from '../common/serializers';
+import { serializeExercise, serializeWorkoutSetLog } from '../common/workout-serializers';
 import { MacroTargetsService } from '../macro-targets/macro-targets.service';
 import { WeeklyMacroTargetsService } from '../macro-targets/weekly-macro-targets.service';
 import { WeeklyMealsService } from '../meal-plans/weekly-meals.service';
@@ -31,6 +34,8 @@ import { DayMealsService } from '../meal-plans/day-meals.service';
 import { FoodsService } from '../foods/foods.service';
 import { MealPlansService } from '../meal-plans/meal-plans.service';
 import { FoodLogsService } from '../food-logs/food-logs.service';
+import { ExercisesService } from '../exercises/exercises.service';
+import { WorkoutsService } from '../workouts/workouts.service';
 
 @Injectable()
 export class SyncService {
@@ -44,6 +49,8 @@ export class SyncService {
     private readonly foodsService: FoodsService,
     private readonly mealPlansService: MealPlansService,
     private readonly foodLogsService: FoodLogsService,
+    private readonly exercisesService: ExercisesService,
+    private readonly workoutsService: WorkoutsService,
   ) {}
 
   async pull(userId: string, since?: string) {
@@ -63,6 +70,8 @@ export class SyncService {
       foodRows,
       mealRows,
       logRows,
+      exerciseRows,
+      setLogRows,
     ] = await Promise.all([
       this.db.query.macroTargets.findMany({ where: changedSince(macroTargets) }),
       this.db.query.weeklyMacroTargets.findMany({
@@ -110,6 +119,18 @@ export class SyncService {
           or(gt(foodLogEntries.updatedAt, sinceDate), isNotNull(foodLogEntries.deletedAt)),
         ),
       }),
+      this.db.query.exercises.findMany({
+        where: and(
+          or(eq(exercises.userId, userId), eq(exercises.isGlobal, true)),
+          or(gt(exercises.updatedAt, sinceDate), isNotNull(exercises.deletedAt)),
+        ),
+      }),
+      this.db.query.workoutSetLogs.findMany({
+        where: and(
+          eq(workoutSetLogs.userId, userId),
+          or(gt(workoutSetLogs.updatedAt, sinceDate), isNotNull(workoutSetLogs.deletedAt)),
+        ),
+      }),
     ]);
 
     return {
@@ -121,6 +142,8 @@ export class SyncService {
       foods: foodRows.map(serializeFood),
       mealPlanEntries: mealRows.map(serializeMealPlanEntry),
       foodLogEntries: logRows.map(serializeFoodLogEntry),
+      exercises: exerciseRows.map(serializeExercise),
+      workoutSetLogs: setLogRows.map(serializeWorkoutSetLog),
       serverTime: new Date().toISOString(),
     };
   }
@@ -209,6 +232,23 @@ export class SyncService {
             results.push(
               await this.foodLogsService.update(userId, entityId, payload as never),
             );
+          }
+        } else if (entityType === 'exercises') {
+          if (action === 'delete') {
+            results.push(await this.exercisesService.remove(userId, entityId));
+          } else if (action === 'create') {
+            const payloadBody = { ...(payload as Record<string, unknown>), isGlobal: false };
+            results.push(
+              await this.exercisesService.create(userId, payloadBody as never, { id: entityId }),
+            );
+          } else {
+            results.push(await this.exercisesService.update(userId, entityId, payload as never));
+          }
+        } else if (entityType === 'workout_set_logs') {
+          if (action === 'delete') {
+            results.push(await this.workoutsService.removeSet(userId, entityId));
+          } else if (action === 'update') {
+            results.push(await this.workoutsService.updateSet(userId, entityId, payload as never));
           }
         }
       } catch (error) {
