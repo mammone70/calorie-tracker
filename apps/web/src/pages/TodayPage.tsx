@@ -89,7 +89,7 @@ export function TodayPage() {
     await queryClient.invalidateQueries({ queryKey: ['weekly-meals'] });
   };
 
-  const mealsHeading = isToday ? "Today's meals" : 'Meals';
+  const mealsHeading = 'Meals';
 
   return (
     <div>
