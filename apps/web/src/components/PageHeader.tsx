@@ -15,11 +15,11 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        'border-b border-border bg-header-surface backdrop-surface px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]',
-        !embedded && 'sticky top-0 z-20 shadow-[0_4px_24px_rgba(0,0,0,0.35)]',
+        'border-b border-border/60 bg-app py-3 pt-[max(0.75rem,env(safe-area-inset-top))]',
+        !embedded && 'sticky top-0 z-20',
       )}
     >
-      <div className="mx-auto flex max-w-lg items-center gap-3">
+      <div className="mx-auto flex w-full min-w-0 max-w-lg items-center gap-3 px-4">
         {backTo && (
           <Button variant="link" className="h-auto shrink-0 p-0" asChild>
             <Link to={backTo}>← Back</Link>

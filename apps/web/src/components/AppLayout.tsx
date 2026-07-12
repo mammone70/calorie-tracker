@@ -1,32 +1,34 @@
+import { Home, CalendarDays, UtensilsCrossed, Settings } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { HeaderActions } from './HeaderActions';
 import { cn } from '@/lib/utils';
 
 const tabs = [
-  { to: '/', label: 'Today', end: true },
-  { to: '/calendar', label: 'Calendar' },
-  { to: '/foods', label: 'Foods' },
-  { to: '/settings', label: 'Settings' },
-];
+  { to: '/', label: 'Today', end: true, icon: Home },
+  { to: '/calendar', label: 'Calendar', end: false, icon: CalendarDays },
+  { to: '/foods', label: 'Foods', end: false, icon: UtensilsCrossed },
+  { to: '/settings', label: 'Settings', end: false, icon: Settings },
+] as const;
 
 const mainTabPaths = new Set(tabs.map((tab) => tab.to));
 
 export function AppLayout() {
   const { isOnline } = useAuth();
   const { pathname } = useLocation();
-  const showAppHeader = mainTabPaths.has(pathname);
+  const isTodayTab = pathname === '/';
+  const showBrandHeader = mainTabPaths.has(pathname) && !isTodayTab;
 
   return (
-    <div className="flex min-h-dvh flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] pt-safe-top">
+    <div className="flex min-h-dvh flex-col pb-[calc(4rem+env(safe-area-inset-bottom))]">
       {!isOnline && (
         <div className="bg-primary px-4 py-2 text-center text-sm text-primary-foreground">
           Offline — changes will sync when back online
         </div>
       )}
-      {showAppHeader && (
-        <header className="sticky top-0 z-30 border-b border-border bg-header-surface backdrop-surface px-4 py-2 shadow-[0_4px_24px_rgba(0,0,0,0.35)] pt-[max(0.5rem,env(safe-area-inset-top))]">
-          <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
+      {showBrandHeader && (
+        <header className="sticky top-0 z-30 border-b border-border/60 bg-app py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+          <div className="mx-auto flex w-full min-w-0 max-w-lg items-center justify-between gap-3 px-4">
             <h1 className="truncate text-lg font-bold text-primary">Fitty Kitties</h1>
             <HeaderActions />
           </div>
@@ -35,25 +37,29 @@ export function AppLayout() {
       <main className="flex-1">
         <Outlet />
       </main>
-      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-header-surface backdrop-surface pb-safe shadow-[0_-6px_24px_rgba(0,0,0,0.5)]">
-        <div className="mx-auto flex max-w-lg">
-          {tabs.map((tab) => (
-            <NavLink
-              key={tab.to}
-              to={tab.to}
-              end={tab.end}
-              className={({ isActive }) => {
-                const active =
-                  isActive || (tab.to === '/calendar' && pathname.startsWith('/day/'));
-                return cn(
-                  'flex flex-1 flex-col items-center py-3 text-xs font-medium transition-colors',
-                  active ? 'text-primary' : 'text-muted-foreground',
-                );
-              }}
-            >
-              <span>{tab.label}</span>
-            </NavLink>
-          ))}
+      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-border/60 bg-app bg-app-bottom pb-safe">
+        <div className="flex w-full">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <NavLink
+                key={tab.to}
+                to={tab.to}
+                end={tab.end}
+                className={({ isActive }) => {
+                  const active =
+                    isActive || (tab.to === '/calendar' && pathname.startsWith('/day/'));
+                  return cn(
+                    'flex flex-1 flex-col items-center gap-0.5 py-2 text-[0.65rem] font-medium transition-colors',
+                    active ? 'text-primary' : 'text-muted-foreground',
+                  );
+                }}
+              >
+                <Icon className="size-5" strokeWidth={2} aria-hidden />
+                <span>{tab.label}</span>
+              </NavLink>
+            );
+          })}
         </div>
       </nav>
     </div>

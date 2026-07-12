@@ -18,6 +18,14 @@
     background-attachment: fixed;
   }
 
+  @media (hover: none) and (pointer: coarse) {
+    html,
+    body,
+    #root {
+      background-attachment: scroll;
+    }
+  }
+
   body {
     overflow-x: clip;
   }
@@ -314,6 +322,23 @@
 }
 
 @layer utilities {
+  /* Opaque chrome fill matching the page gradient without background-attachment:
+     fixed (that breaks scroll/layout on many mobile browsers). */
+  .bg-app {
+    background-color: var(--background);
+    background-image:
+      radial-gradient(ellipse 90% 70% at 0% 0%, var(--background-highlight), transparent 55%),
+      radial-gradient(ellipse 80% 60% at 100% 100%, var(--background-shadow), transparent 50%),
+      linear-gradient(90deg, var(--background-from) 0%, var(--background) 48%, var(--background-to) 100%);
+    background-repeat: no-repeat;
+    background-size: 100vw 100dvh;
+    background-position: center top;
+  }
+
+  .bg-app-bottom {
+    background-position: center bottom;
+  }
+
   .bg-card-surface {
     background-color: color-mix(in srgb, var(--surface) 70%, transparent);
     border: 1px solid var(--surface-border);
