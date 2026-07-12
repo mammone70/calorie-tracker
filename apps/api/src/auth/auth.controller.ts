@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Get,
   Param,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -14,10 +15,12 @@ import {
   loginSchema,
   refreshSchema,
   registerSchema,
+  updateUserPreferencesSchema,
   type ChangePasswordInput,
   type LoginInput,
   type RefreshInput,
   type RegisterInput,
+  type UpdateUserPreferencesInput,
 } from '@calorie-tracker/shared';
 import { zodPipe } from '../common/zod-validation.pipe';
 import { isRegistrationAllowed } from '../config/env.validation';
@@ -57,6 +60,15 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@Req() req: { user: AuthUser }) {
     return this.authService.getMe(req.user.userId);
+  }
+
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  updateMe(
+    @Req() req: { user: AuthUser },
+    @Body(zodPipe(updateUserPreferencesSchema)) body: UpdateUserPreferencesInput,
+  ) {
+    return this.authService.updatePreferences(req.user.userId, body);
   }
 
   @Post('change-password')

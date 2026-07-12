@@ -121,6 +121,7 @@ export class FoodLogsService {
     id: string,
     input: Partial<FoodLogEntryInput>,
     timeZone?: string,
+    options?: { syncPlan?: boolean },
   ) {
     const tz = timeZone ?? 'America/Los_Angeles';
     const existing = await this.db.query.foodLogEntries.findFirst({
@@ -158,18 +159,139 @@ export class FoodLogsService {
       })
       .where(eq(foodLogEntries.id, id))
       .returning();
+
+    const shouldSyncPlan =
+      options?.syncPlan !== false &&
+      (input.quantity !== undefined || input.unit !== undefined);
+
+    if (shouldSyncPlan) {
+      await this.syncDayPlanFromLog(
+        userId,
+        serializeFoodLogEntry(row),
+        Number(row.quantity),
+        row.unit,
+        tz,
+      );
+      const refreshed = await this.db.query.foodLogEntries.findFirst({
+        where: and(eq(foodLogEntries.id, id), eq(foodLogEntries.userId, userId)),
+      });
+      if (refreshed) return serializeFoodLogEntry(refreshed);
+    }
+
     return serializeFoodLogEntry(row);
+  }
+
+  /** Fork weekly → day override if needed, then write quantity/unit onto the day's plan entry. */
+  private async ensureDayOverride(userId: string, date: string, timeZone: string) {
+    const existingEntries = await this.mealPlansService.findByDate(userId, date);
+    const existingMeals = await this.dayMealsService.findByDate(userId, date);
+    const dayOfWeek = dayOfWeekFromDate(date);
+
+    if (existingEntries.length > 0 || existingMeals.length > 0) {
+      const weeklyMeals = await this.weeklyMealsService.findAll(userId, dayOfWeek);
+      const mealIdMap = new Map<string, string>();
+      for (const weekly of weeklyMeals) {
+        const dayMeal = existingMeals.find((meal) => meal.mealIndex === weekly.mealIndex);
+        if (dayMeal) mealIdMap.set(weekly.id, dayMeal.id);
+      }
+      await this.remapWeeklyLogsToDayMeals(userId, date, mealIdMap, timeZone);
+      return;
+    }
+
+    const [weeklyMeals, weeklyEntries] = await Promise.all([
+      this.weeklyMealsService.findAll(userId, dayOfWeek),
+      this.weeklyMealPlansService.findAll(userId, dayOfWeek),
+    ]);
+
+    const mealIdMap = new Map<string, string>();
+    for (const meal of weeklyMeals) {
+      const created = await this.dayMealsService.create(userId, {
+        planDate: date,
+        mealIndex: meal.mealIndex,
+        name: meal.name,
+        mealTime: meal.mealTime ?? undefined,
+      });
+      mealIdMap.set(meal.id, created.id);
+    }
+
+    for (const entry of weeklyEntries) {
+      const dayMealId = mealIdMap.get(entry.weeklyMealId);
+      if (!dayMealId) continue;
+      await this.mealPlansService.create(userId, {
+        planDate: date,
+        dayMealId,
+        foodId: entry.foodId,
+        quantity: entry.quantity,
+        unit: entry.unit,
+      });
+    }
+
+    await this.remapWeeklyLogsToDayMeals(userId, date, mealIdMap, timeZone);
+  }
+
+  private async syncDayPlanFromLog(
+    userId: string,
+    log: SerializedFoodLog,
+    quantity: number,
+    unit: string,
+    timeZone: string,
+  ) {
+    const date = formatDateInTimeZone(new Date(log.loggedAt), timeZone);
+
+    // Day plans own quantities; fork off the weekly template before writing.
+    if (log.weeklyMealId || !(await this.hasDayOverride(userId, date))) {
+      await this.ensureDayOverride(userId, date, timeZone);
+    }
+
+    const refreshed = await this.db.query.foodLogEntries.findFirst({
+      where: and(
+        eq(foodLogEntries.id, log.id),
+        eq(foodLogEntries.userId, userId),
+        isNull(foodLogEntries.deletedAt),
+      ),
+    });
+    if (!refreshed?.dayMealId) return;
+
+    const entries = await this.mealPlansService.findByDate(userId, date);
+    const match = entries.find(
+      (entry) => entry.dayMealId === refreshed.dayMealId && entry.foodId === refreshed.foodId,
+    );
+
+    if (match) {
+      if (match.quantity !== quantity || match.unit !== unit) {
+        await this.mealPlansService.update(userId, match.id, { quantity, unit });
+      }
+      return;
+    }
+
+    await this.mealPlansService.create(userId, {
+      planDate: date,
+      dayMealId: refreshed.dayMealId,
+      foodId: refreshed.foodId,
+      quantity,
+      unit,
+    });
   }
 
   async confirm(userId: string, id: string, timeZone?: string) {
     return this.update(userId, id, { status: 'confirmed' }, timeZone);
   }
 
-  async remove(userId: string, id: string) {
+  async remove(
+    userId: string,
+    id: string,
+    timeZone?: string,
+    options?: { syncPlan?: boolean },
+  ) {
+    const tz = timeZone ?? 'America/Los_Angeles';
     const existing = await this.db.query.foodLogEntries.findFirst({
       where: and(eq(foodLogEntries.id, id), eq(foodLogEntries.userId, userId)),
     });
     if (!existing) throw new NotFoundException('Food log entry not found');
+
+    if (options?.syncPlan === true && !existing.deletedAt) {
+      await this.removeDayPlanEntryForLog(userId, serializeFoodLogEntry(existing), tz);
+    }
 
     const [row] = await this.db
       .update(foodLogEntries)
@@ -177,6 +299,55 @@ export class FoodLogsService {
       .where(eq(foodLogEntries.id, id))
       .returning();
     return serializeFoodLogEntry(row);
+  }
+
+  private async removeDayPlanEntryForLog(
+    userId: string,
+    log: SerializedFoodLog,
+    timeZone: string,
+  ) {
+    const date = formatDateInTimeZone(new Date(log.loggedAt), timeZone);
+
+    if (log.weeklyMealId || !(await this.hasDayOverride(userId, date))) {
+      await this.ensureDayOverride(userId, date, timeZone);
+    }
+
+    let dayMealId = log.dayMealId ?? null;
+    if (!dayMealId && log.weeklyMealId) {
+      const refreshed = await this.db.query.foodLogEntries.findFirst({
+        where: and(
+          eq(foodLogEntries.id, log.id),
+          eq(foodLogEntries.userId, userId),
+          isNull(foodLogEntries.deletedAt),
+        ),
+      });
+      dayMealId = refreshed?.dayMealId ?? null;
+    }
+
+    // After forking, weekly-linked logs are remapped; resolve day meal via meal index if needed.
+    if (!dayMealId && log.weeklyMealId) {
+      const weekly = await this.db.query.weeklyMeals.findFirst({
+        where: and(
+          eq(weeklyMeals.id, log.weeklyMealId),
+          eq(weeklyMeals.userId, userId),
+          isNull(weeklyMeals.deletedAt),
+        ),
+      });
+      if (weekly) {
+        const dayMealList = await this.dayMealsService.findByDate(userId, date);
+        dayMealId = dayMealList.find((meal) => meal.mealIndex === weekly.mealIndex)?.id ?? null;
+      }
+    }
+
+    if (!dayMealId) return;
+
+    const entries = await this.mealPlansService.findByDate(userId, date);
+    const match = entries.find(
+      (entry) => entry.dayMealId === dayMealId && entry.foodId === log.foodId,
+    );
+    if (match) {
+      await this.mealPlansService.remove(userId, match.id);
+    }
   }
 
   async remapWeeklyLogsToDayMeals(
@@ -323,7 +494,9 @@ export class FoodLogsService {
       if (!planEntry) continue;
 
       if (log.quantity !== planEntry.quantity) {
-        await this.update(userId, log.id, { quantity: planEntry.quantity }, timeZone);
+        await this.update(userId, log.id, { quantity: planEntry.quantity }, timeZone, {
+          syncPlan: false,
+        });
       }
     }
 

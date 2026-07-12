@@ -1,5 +1,6 @@
 import { parseCalendarDate, formatCalendarDate } from './date-utils';
 import { dayOfWeekFromDate } from './macro-target-utils';
+import type { PrescriptionKind, WeightUnit } from './constants';
 import type { WorkoutTemplate, WorkoutTemplateExercise } from './schemas/workout-template';
 import type { WorkoutSetLog } from './schemas/day-workout';
 
@@ -21,6 +22,8 @@ export type DayWorkoutExerciseLike = {
   repsMin: number;
   repsMax: number;
   targetWeight?: number | null;
+  prescriptionKind?: PrescriptionKind;
+  prescriptionValue?: number | null;
   deletedAt?: string | null;
 };
 
@@ -32,6 +35,8 @@ export type EffectiveWorkoutExercise = {
   repsMin: number;
   repsMax: number;
   targetWeight?: number | null;
+  prescriptionKind: PrescriptionKind;
+  prescriptionValue?: number | null;
   sets: WorkoutSetLog[];
   source: 'override' | 'template';
 };
@@ -114,6 +119,8 @@ export function resolveEffectiveWorkouts(
             repsMin: ex.repsMin,
             repsMax: ex.repsMax,
             targetWeight: ex.targetWeight ?? null,
+            prescriptionKind: ex.prescriptionKind ?? 'none',
+            prescriptionValue: ex.prescriptionValue ?? null,
             source: 'override' as const,
             sets: (setsByExercise.get(ex.id) ?? []).sort((a, b) => a.setIndex - b.setIndex),
           })),
@@ -153,12 +160,50 @@ export function resolveEffectiveWorkouts(
         repsMin: ex.repsMin,
         repsMax: ex.repsMax,
         targetWeight: ex.targetWeight ?? null,
+        prescriptionKind: ex.prescriptionKind ?? 'none',
+        prescriptionValue: ex.prescriptionValue ?? null,
         source: 'template' as const,
         sets: [],
       })),
   }));
 
   return { source: 'template', sessions };
+}
+
+export function formatPrescription(
+  kind: PrescriptionKind | null | undefined,
+  value: number | null | undefined,
+  weightUnit: WeightUnit = 'lbs',
+): string {
+  if (!kind || kind === 'none' || value == null) return '';
+  if (kind === 'rpe') return `RPE ${value}`;
+  if (kind === 'rir') return `RIR ${value}`;
+  if (kind === 'load_increase') return `+${value} ${weightUnit}`;
+  return '';
+}
+
+export function formatExercisePrescriptionSummary(input: {
+  targetSets: number;
+  repsMin: number;
+  repsMax: number;
+  targetWeight?: number | null;
+  prescriptionKind?: PrescriptionKind | null;
+  prescriptionValue?: number | null;
+  weightUnit?: WeightUnit;
+}): string {
+  const reps =
+    input.repsMax !== input.repsMin ? `${input.repsMin}–${input.repsMax}` : String(input.repsMin);
+  const parts = [`${input.targetSets} × ${reps}`];
+  if (input.targetWeight != null) {
+    parts.push(`@ ${input.targetWeight}${input.weightUnit ? ` ${input.weightUnit}` : ''}`);
+  }
+  const prescription = formatPrescription(
+    input.prescriptionKind,
+    input.prescriptionValue,
+    input.weightUnit ?? 'lbs',
+  );
+  if (prescription) parts.push(prescription);
+  return parts.join(' ');
 }
 
 /** Days between two YYYY-MM-DD dates (calendar). */

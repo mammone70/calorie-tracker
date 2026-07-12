@@ -5,11 +5,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ExercisePicker } from './ExercisePicker';
+import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/client';
-import type {
-  EffectiveWorkouts,
-  Exercise,
-  WorkoutSetLog,
+import {
+  DEFAULT_WEIGHT_UNIT,
+  formatExercisePrescriptionSummary,
+  type EffectiveWorkouts,
+  type EffectiveWorkoutExercise,
+  type Exercise,
+  type WeightUnit,
+  type WorkoutSetLog,
 } from '@calorie-tracker/shared';
 import { cn, inputFieldClass } from '@/lib/utils';
 
@@ -17,7 +22,19 @@ type DailyWorkoutsProps = {
   date: string;
 };
 
+function prescriptionKindPlaceholder(
+  ex: Pick<EffectiveWorkoutExercise, 'prescriptionKind' | 'prescriptionValue'>,
+  weightUnit: WeightUnit,
+): string {
+  if (ex.prescriptionKind === 'load_increase' && ex.prescriptionValue != null) {
+    return `+${ex.prescriptionValue}`;
+  }
+  return weightUnit;
+}
+
 export function DailyWorkouts({ date }: DailyWorkoutsProps) {
+  const { user } = useAuth();
+  const weightUnit = user?.weightUnit ?? DEFAULT_WEIGHT_UNIT;
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [drafts, setDrafts] = useState<
@@ -170,6 +187,15 @@ export function DailyWorkouts({ date }: DailyWorkoutsProps) {
               const open = expanded[ex.id] ?? false;
               const name = exerciseMap.get(ex.exerciseId)?.name ?? 'Exercise';
               const confirmed = ex.sets.filter((s) => s.status === 'confirmed').length;
+              const summary = formatExercisePrescriptionSummary({
+                targetSets: ex.targetSets,
+                repsMin: ex.repsMin,
+                repsMax: ex.repsMax,
+                targetWeight: ex.targetWeight,
+                prescriptionKind: ex.prescriptionKind,
+                prescriptionValue: ex.prescriptionValue,
+                weightUnit,
+              });
               return (
                 <div key={ex.id} className="rounded-md border border-border">
                   <button
@@ -177,20 +203,27 @@ export function DailyWorkouts({ date }: DailyWorkoutsProps) {
                     className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
                     onClick={() => setExpanded((prev) => ({ ...prev, [ex.id]: !open }))}
                   >
-                    <span className="font-medium">
-                      {name}{' '}
+                    <span className="min-w-0">
+                      <span className="font-medium">{name}</span>{' '}
                       <span className="text-xs font-normal text-muted-foreground">
-                        {confirmed}/{ex.sets.length} sets
+                        {confirmed}/{ex.sets.length || ex.targetSets} sets
+                      </span>
+                      <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                        {summary}
                       </span>
                     </span>
                     <ChevronDown
-                      className={cn('size-4 transition-transform', open && 'rotate-180')}
+                      className={cn('size-4 shrink-0 transition-transform', open && 'rotate-180')}
                     />
                   </button>
                   {open && (
                     <div className="space-y-2 border-t border-border px-3 py-2">
                       {ex.sets.map((set, index) => {
                         const draft = drafts[set.id] ?? { reps: '', weight: '' };
+                        const weightPlaceholder =
+                          set.targetWeight != null
+                            ? String(set.targetWeight)
+                            : prescriptionKindPlaceholder(ex, weightUnit);
                         return (
                           <div
                             key={set.id}
@@ -228,7 +261,7 @@ export function DailyWorkouts({ date }: DailyWorkoutsProps) {
                               }
                               className={cn(inputFieldClass, 'h-8')}
                               aria-label="Weight"
-                              placeholder="kg"
+                              placeholder={weightPlaceholder || weightUnit}
                             />
                             <div className="flex gap-1">
                               {set.status === 'confirmed' ? (
@@ -251,14 +284,14 @@ export function DailyWorkouts({ date }: DailyWorkoutsProps) {
                                   onClick={() => void confirmSet(set)}
                                   aria-label="Confirm set"
                                 >
-                                  <Check className="size-4 text-green-600" />
+                                  <Check className="size-4" />
                                 </Button>
                               )}
                               <Button
                                 type="button"
                                 size="icon"
                                 variant="ghost"
-                                className="size-8 text-destructive"
+                                className="size-8"
                                 onClick={() => void removeSet(set.id)}
                                 aria-label="Remove set"
                               >
@@ -268,23 +301,25 @@ export function DailyWorkouts({ date }: DailyWorkoutsProps) {
                           </div>
                         );
                       })}
-                      <div className="flex flex-wrap gap-2 pt-1">
+                      <div className="flex gap-2">
                         <Button
                           type="button"
-                          size="sm"
                           variant="outline"
+                          size="sm"
+                          className="flex-1"
                           onClick={() => void addSet(ex.id)}
                         >
-                          <Plus className="mr-1 size-3" /> Set
+                          <Plus className="size-4" />
+                          Add set
                         </Button>
                         <Button
                           type="button"
-                          size="sm"
                           variant="ghost"
+                          size="sm"
                           className="text-destructive"
                           onClick={() => void removeExercise(ex.id)}
                         >
-                          Remove exercise
+                          Remove
                         </Button>
                       </div>
                     </div>

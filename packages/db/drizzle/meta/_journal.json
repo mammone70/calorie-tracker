@@ -64,6 +64,13 @@
       "when": 1751500800000,
       "tag": "0009_exercise_global",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1751587200000,
+      "tag": "0010_prescription_weight_unit",
+      "breakpoints": true
     }
   ]
 }

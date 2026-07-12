@@ -136,6 +136,13 @@ export class ApiClient {
     return this.request<User>('/auth/me');
   }
 
+  updateMe(body: { weightUnit: 'lbs' | 'kg' }) {
+    return this.request<User>('/auth/me', {
+      method: 'PATCH',
+      body,
+    });
+  }
+
   changePassword(currentPassword: string, newPassword: string) {
     return this.request<{ ok: true }>('/auth/change-password', {
       method: 'POST',

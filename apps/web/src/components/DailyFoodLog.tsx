@@ -163,12 +163,32 @@ export function DailyFoodLog({
 
     await runMutation(async () => {
       await api.updateFoodLog(log.id, { quantity: qty });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['meal-plans-effective', date] }),
+        queryClient.invalidateQueries({ queryKey: ['meal-plans', date] }),
+      ]);
     });
   };
 
   const confirmLog = async (id: string, { toast = true }: { toast?: boolean } = {}) => {
+    const log = logs.find((entry) => entry.id === id);
+    const raw = draftQuantities[id];
+    const qty = Number(raw);
+    if (log && Number.isFinite(qty) && qty > 0 && qty !== log.quantity) {
+      try {
+        await api.updateFoodLog(id, { quantity: qty });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['meal-plans-effective', date] }),
+          queryClient.invalidateQueries({ queryKey: ['meal-plans', date] }),
+        ]);
+      } catch (error) {
+        showErrorFromUnknown(error);
+        throw error;
+      }
+    }
+
     const previous = patchFoodLogsCache((current) =>
-      current.map((log) => (log.id === id ? { ...log, status: 'confirmed' as const } : log)),
+      current.map((entry) => (entry.id === id ? { ...entry, status: 'confirmed' as const } : entry)),
     );
     setLogBusy(id, true);
     try {
@@ -211,7 +231,11 @@ export function DailyFoodLog({
     try {
       await api.deleteFoodLog(id);
       showSuccess('Removed');
-      await queryClient.invalidateQueries({ queryKey: ['food-logs', date] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['food-logs', date] }),
+        queryClient.invalidateQueries({ queryKey: ['meal-plans-effective', date] }),
+        queryClient.invalidateQueries({ queryKey: ['meal-plans', date] }),
+      ]);
     } catch (error) {
       if (previous) queryClient.setQueryData(['food-logs', date], previous);
       showErrorFromUnknown(error);
@@ -228,14 +252,13 @@ export function DailyFoodLog({
     setMessage('');
     try {
       for (const log of pending) {
-        const raw = draftQuantities[log.id];
-        const qty = Number(raw);
-        if (Number.isFinite(qty) && qty > 0 && qty !== log.quantity) {
-          await api.updateFoodLog(log.id, { quantity: qty });
-        }
-
         await confirmLog(log.id, { toast: false });
       }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['meal-plans-effective', date] }),
+        queryClient.invalidateQueries({ queryKey: ['meal-plans', date] }),
+      ]);
 
       showSuccess('Meal confirmed');
       await queryClient.invalidateQueries({ queryKey: ['food-logs', date] });

@@ -35,11 +35,21 @@ export const workoutScheduleKindEnum = pgEnum('workout_schedule_kind', ['weekday
 
 export const workoutSetStatusEnum = pgEnum('workout_set_status', ['pending', 'confirmed']);
 
+export const weightUnitEnum = pgEnum('weight_unit', ['lbs', 'kg']);
+
+export const prescriptionKindEnum = pgEnum('prescription_kind', [
+  'none',
+  'rpe',
+  'rir',
+  'load_increase',
+]);
+
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   role: userRoleEnum('role').notNull().default('client'),
+  weightUnit: weightUnitEnum('weight_unit').notNull().default('lbs'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -296,6 +306,8 @@ export const workoutTemplateExercises = pgTable('workout_template_exercises', {
   repsMin: integer('reps_min').notNull(),
   repsMax: integer('reps_max').notNull(),
   targetWeight: numeric('target_weight', { precision: 10, scale: 2 }),
+  prescriptionKind: prescriptionKindEnum('prescription_kind').notNull().default('none'),
+  prescriptionValue: numeric('prescription_value', { precision: 10, scale: 2 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -341,6 +353,8 @@ export const dayWorkoutExercises = pgTable('day_workout_exercises', {
   repsMin: integer('reps_min').notNull(),
   repsMax: integer('reps_max').notNull(),
   targetWeight: numeric('target_weight', { precision: 10, scale: 2 }),
+  prescriptionKind: prescriptionKindEnum('prescription_kind').notNull().default('none'),
+  prescriptionValue: numeric('prescription_value', { precision: 10, scale: 2 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),

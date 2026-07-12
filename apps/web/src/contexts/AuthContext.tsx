@@ -14,6 +14,7 @@ type AuthContextValue = {
   logout: () => Promise<void>;
   sync: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  updatePreferences: (input: { weightUnit: 'lbs' | 'kg' }) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -100,6 +101,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const updatePreferences = async (input: { weightUnit: 'lbs' | 'kg' }) => {
+    const updated = await api.updateMe(input);
+    setUser(updated);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -113,6 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         sync: runSync,
         changePassword,
+        updatePreferences,
       }}
     >
       {children}

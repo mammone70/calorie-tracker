@@ -16,6 +16,13 @@ export type WorkoutScheduleKind = (typeof WORKOUT_SCHEDULE_KINDS)[number];
 export const WORKOUT_SET_STATUSES = ['pending', 'confirmed'] as const;
 export type WorkoutSetStatus = (typeof WORKOUT_SET_STATUSES)[number];
 
+export const WEIGHT_UNITS = ['lbs', 'kg'] as const;
+export type WeightUnit = (typeof WEIGHT_UNITS)[number];
+export const DEFAULT_WEIGHT_UNIT: WeightUnit = 'lbs';
+
+export const PRESCRIPTION_KINDS = ['none', 'rpe', 'rir', 'load_increase'] as const;
+export type PrescriptionKind = (typeof PRESCRIPTION_KINDS)[number];
+
 export const SYNC_ENTITY_TYPES = [
   'macro_targets',
   'weekly_macro_targets',

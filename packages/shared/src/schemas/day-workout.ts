@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { WORKOUT_SET_STATUSES } from '../constants';
+import { PRESCRIPTION_KINDS, WORKOUT_SET_STATUSES } from '../constants';
+import { refinePrescription } from './workout-template';
 
 export const workoutSetLogSchema = z.object({
   id: z.string().uuid(),
@@ -31,13 +32,34 @@ export const confirmWorkoutSetSchema = z.object({
   actualWeight: z.number().nonnegative().nullable().optional(),
 });
 
-export const createDayWorkoutExerciseSchema = z.object({
+export const createDayWorkoutExerciseSchema = z
+  .object({
+    exerciseId: z.string().uuid(),
+    sortIndex: z.number().int().min(0).default(0),
+    targetSets: z.number().int().min(1).max(50),
+    repsMin: z.number().int().min(0).max(999),
+    repsMax: z.number().int().min(0).max(999),
+    targetWeight: z.number().nonnegative().nullable().optional(),
+    prescriptionKind: z.enum(PRESCRIPTION_KINDS).default('none'),
+    prescriptionValue: z.number().nonnegative().nullable().optional(),
+  })
+  .superRefine(refinePrescription);
+
+export const dayWorkoutExerciseSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  sessionId: z.string().uuid(),
   exerciseId: z.string().uuid(),
-  sortIndex: z.number().int().min(0).default(0),
-  targetSets: z.number().int().min(1).max(50),
-  repsMin: z.number().int().min(0).max(999),
-  repsMax: z.number().int().min(0).max(999),
-  targetWeight: z.number().nonnegative().nullable().optional(),
+  sortIndex: z.number().int(),
+  targetSets: z.number().int(),
+  repsMin: z.number().int(),
+  repsMax: z.number().int(),
+  targetWeight: z.number().nullable().optional(),
+  prescriptionKind: z.enum(PRESCRIPTION_KINDS),
+  prescriptionValue: z.number().nullable().optional(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  deletedAt: z.string().datetime().nullable().optional(),
 });
 
 export const createDayWorkoutSessionSchema = z.object({
@@ -65,5 +87,6 @@ export type WorkoutSetLog = z.infer<typeof workoutSetLogSchema>;
 export type UpdateWorkoutSetLogInput = z.infer<typeof updateWorkoutSetLogSchema>;
 export type ConfirmWorkoutSetInput = z.infer<typeof confirmWorkoutSetSchema>;
 export type CreateDayWorkoutExerciseInput = z.infer<typeof createDayWorkoutExerciseSchema>;
+export type DayWorkoutExercise = z.infer<typeof dayWorkoutExerciseSchema>;
 export type CreateDayWorkoutSessionInput = z.infer<typeof createDayWorkoutSessionSchema>;
 export type AddWorkoutSetInput = z.infer<typeof addWorkoutSetSchema>;

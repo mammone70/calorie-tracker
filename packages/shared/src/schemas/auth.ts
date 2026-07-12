@@ -1,6 +1,8 @@
 import { z } from 'zod';
+import { DEFAULT_WEIGHT_UNIT, WEIGHT_UNITS } from '../constants';
 
 export const userRoleSchema = z.enum(['client', 'admin']);
+export const userWeightUnitSchema = z.enum(WEIGHT_UNITS);
 
 export const registerSchema = z.object({
   email: z.string().email(),
@@ -31,7 +33,12 @@ export const userSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
   role: userRoleSchema,
+  weightUnit: userWeightUnitSchema.default(DEFAULT_WEIGHT_UNIT),
   createdAt: z.string().datetime(),
+});
+
+export const updateUserPreferencesSchema = z.object({
+  weightUnit: userWeightUnitSchema,
 });
 
 export const authResponseSchema = z.object({
@@ -76,6 +83,7 @@ export type RefreshInput = z.infer<typeof refreshSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type AuthTokens = z.infer<typeof authTokensSchema>;
 export type User = z.infer<typeof userSchema>;
+export type UpdateUserPreferencesInput = z.infer<typeof updateUserPreferencesSchema>;
 export type AuthResponse = z.infer<typeof authResponseSchema>;
 export type InvitePreview = z.infer<typeof invitePreviewSchema>;
 export type CreateInvitationInput = z.infer<typeof createInvitationSchema>;

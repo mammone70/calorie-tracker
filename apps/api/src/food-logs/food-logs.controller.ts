@@ -88,7 +88,11 @@ export class FoodLogsController {
   }
 
   @Delete(':id')
-  remove(@Req() req: { user: AuthUser }, @Param('id') id: string) {
-    return this.service.remove(req.user.userId, id);
+  remove(
+    @Req() req: { user: AuthUser; headers: Record<string, string | string[] | undefined> },
+    @Param('id') id: string,
+  ) {
+    const timeZone = resolveRequestTimeZone(req.headers);
+    return this.service.remove(req.user.userId, id, timeZone, { syncPlan: true });
   }
 }

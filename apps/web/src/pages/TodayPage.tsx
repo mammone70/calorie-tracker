@@ -60,7 +60,6 @@ export function TodayPage() {
   const foodsMap = new Map((foodsQuery.data ?? []).map((f) => [f.id, f]));
   const meals = mealsQuery.data?.meals ?? [];
   const confirmedLogs = confirmedFoodLogs(logsQuery.data ?? []);
-  const isToday = selectedDate === today;
 
   const consumed: Nutrients = sumNutrients(
     confirmedLogs.map((log) => {

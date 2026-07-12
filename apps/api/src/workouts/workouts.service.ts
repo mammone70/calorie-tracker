@@ -136,6 +136,9 @@ export class WorkoutsService {
         repsMin: input.repsMin,
         repsMax: input.repsMax,
         targetWeight: input.targetWeight != null ? String(input.targetWeight) : null,
+        prescriptionKind: input.prescriptionKind ?? 'none',
+        prescriptionValue:
+          input.prescriptionValue != null ? String(input.prescriptionValue) : null,
       })
       .returning();
     return serializeWorkoutTemplateExercise(row);
@@ -166,6 +169,13 @@ export class WorkoutsService {
         ...(input.targetWeight !== undefined && {
           targetWeight: input.targetWeight != null ? String(input.targetWeight) : null,
         }),
+        ...(input.prescriptionKind !== undefined && { prescriptionKind: input.prescriptionKind }),
+        ...(input.prescriptionValue !== undefined && {
+          prescriptionValue:
+            input.prescriptionValue != null ? String(input.prescriptionValue) : null,
+        }),
+        ...(input.prescriptionKind === 'none' &&
+          input.prescriptionValue === undefined && { prescriptionValue: null }),
         updatedAt: new Date(),
       })
       .where(eq(workoutTemplateExercises.id, id))
@@ -271,6 +281,9 @@ export class WorkoutsService {
                 repsMin: ex.repsMin,
                 repsMax: ex.repsMax,
                 targetWeight: ex.targetWeight != null ? String(ex.targetWeight) : null,
+                prescriptionKind: ex.prescriptionKind ?? 'none',
+                prescriptionValue:
+                  ex.prescriptionValue != null ? String(ex.prescriptionValue) : null,
               })
               .returning();
 
@@ -451,6 +464,9 @@ export class WorkoutsService {
         repsMin: input.repsMin,
         repsMax: input.repsMax,
         targetWeight: input.targetWeight != null ? String(input.targetWeight) : null,
+        prescriptionKind: input.prescriptionKind ?? 'none',
+        prescriptionValue:
+          input.prescriptionValue != null ? String(input.prescriptionValue) : null,
       })
       .returning();
 

@@ -142,8 +142,21 @@ export class AuthService {
       id: user.id,
       email: user.email,
       role: user.role,
+      weightUnit: user.weightUnit ?? 'lbs',
       createdAt: toIso(user.createdAt)!,
     };
+  }
+
+  async updatePreferences(userId: string, input: { weightUnit: 'lbs' | 'kg' }) {
+    const [row] = await this.db
+      .update(users)
+      .set({ weightUnit: input.weightUnit, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    if (!row) {
+      throw new UnauthorizedException('User not found');
+    }
+    return this.serializeUser(row);
   }
 
   private async issueTokens(user: User) {

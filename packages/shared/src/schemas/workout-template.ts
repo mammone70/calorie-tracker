@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { WORKOUT_SCHEDULE_KINDS } from '../constants';
+import { PRESCRIPTION_KINDS, WORKOUT_SCHEDULE_KINDS, type PrescriptionKind } from '../constants';
 
 const repsRangeRefine = (data: { repsMin: number; repsMax: number }, ctx: z.RefinementCtx) => {
   if (data.repsMax < data.repsMin) {
@@ -10,6 +10,58 @@ const repsRangeRefine = (data: { repsMin: number; repsMax: number }, ctx: z.Refi
     });
   }
 };
+
+export function refinePrescription(
+  data: { prescriptionKind?: PrescriptionKind; prescriptionValue?: number | null },
+  ctx: z.RefinementCtx,
+) {
+  const kind = data.prescriptionKind ?? 'none';
+  const value = data.prescriptionValue;
+
+  if (kind === 'none') {
+    if (value != null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'prescriptionValue must be empty when kind is none',
+        path: ['prescriptionValue'],
+      });
+    }
+    return;
+  }
+
+  if (value == null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'prescriptionValue is required',
+      path: ['prescriptionValue'],
+    });
+    return;
+  }
+
+  if (kind === 'rpe' && (value < 1 || value > 10)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'RPE must be between 1 and 10',
+      path: ['prescriptionValue'],
+    });
+  }
+
+  if (kind === 'rir' && (value < 0 || value > 10)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'RIR must be between 0 and 10',
+      path: ['prescriptionValue'],
+    });
+  }
+
+  if (kind === 'load_increase' && value <= 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Load increase must be greater than 0',
+      path: ['prescriptionValue'],
+    });
+  }
+}
 
 export const createWorkoutTemplateSchema = z
   .object({
@@ -43,16 +95,15 @@ export const createWorkoutTemplateSchema = z
     }
   });
 
-export const updateWorkoutTemplateSchema = z
-  .object({
-    name: z.string().min(1).max(200).optional(),
-    scheduleKind: z.enum(WORKOUT_SCHEDULE_KINDS).optional(),
-    dayOfWeek: z.number().int().min(0).max(6).optional().nullable(),
-    intervalDays: z.number().int().min(1).max(365).optional().nullable(),
-    anchorDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-    sortIndex: z.number().int().min(0).optional(),
-    isActive: z.boolean().optional(),
-  });
+export const updateWorkoutTemplateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  scheduleKind: z.enum(WORKOUT_SCHEDULE_KINDS).optional(),
+  dayOfWeek: z.number().int().min(0).max(6).optional().nullable(),
+  intervalDays: z.number().int().min(1).max(365).optional().nullable(),
+  anchorDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  sortIndex: z.number().int().min(0).optional(),
+  isActive: z.boolean().optional(),
+});
 
 export const workoutTemplateSchema = z.object({
   id: z.string().uuid(),
@@ -77,17 +128,24 @@ export const createWorkoutTemplateExerciseSchema = z
     repsMin: z.number().int().min(0).max(999),
     repsMax: z.number().int().min(0).max(999),
     targetWeight: z.number().nonnegative().nullable().optional(),
+    prescriptionKind: z.enum(PRESCRIPTION_KINDS).default('none'),
+    prescriptionValue: z.number().nonnegative().nullable().optional(),
   })
-  .superRefine(repsRangeRefine);
+  .superRefine(repsRangeRefine)
+  .superRefine(refinePrescription);
 
-export const updateWorkoutTemplateExerciseSchema = z.object({
-  exerciseId: z.string().uuid().optional(),
-  sortIndex: z.number().int().min(0).optional(),
-  targetSets: z.number().int().min(1).max(50).optional(),
-  repsMin: z.number().int().min(0).max(999).optional(),
-  repsMax: z.number().int().min(0).max(999).optional(),
-  targetWeight: z.number().nonnegative().nullable().optional(),
-});
+export const updateWorkoutTemplateExerciseSchema = z
+  .object({
+    exerciseId: z.string().uuid().optional(),
+    sortIndex: z.number().int().min(0).optional(),
+    targetSets: z.number().int().min(1).max(50).optional(),
+    repsMin: z.number().int().min(0).max(999).optional(),
+    repsMax: z.number().int().min(0).max(999).optional(),
+    targetWeight: z.number().nonnegative().nullable().optional(),
+    prescriptionKind: z.enum(PRESCRIPTION_KINDS).optional(),
+    prescriptionValue: z.number().nonnegative().nullable().optional(),
+  })
+  .superRefine(refinePrescription);
 
 export const workoutTemplateExerciseSchema = z.object({
   id: z.string().uuid(),
@@ -99,6 +157,8 @@ export const workoutTemplateExerciseSchema = z.object({
   repsMin: z.number().int(),
   repsMax: z.number().int(),
   targetWeight: z.number().nullable().optional(),
+  prescriptionKind: z.enum(PRESCRIPTION_KINDS),
+  prescriptionValue: z.number().nullable().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   deletedAt: z.string().datetime().nullable().optional(),

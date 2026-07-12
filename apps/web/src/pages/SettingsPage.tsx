@@ -15,7 +15,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { COLOR_THEME_OPTIONS, useTheme, type ColorTheme } from '../contexts/ThemeContext';
 
 export function SettingsPage() {
-  const { logout, sync, isAdmin, changePassword } = useAuth();
+  const { logout, sync, isAdmin, changePassword, user, updatePreferences } = useAuth();
   const { colorTheme, setColorTheme } = useTheme();
   const navigate = useNavigate();
   const [message, setMessage] = useState('');
@@ -23,6 +23,7 @@ export function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+  const [savingWeightUnit, setSavingWeightUnit] = useState(false);
 
   const handleSync = async () => {
     setMessage('');
@@ -37,6 +38,20 @@ export function SettingsPage() {
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+
+  const handleWeightUnitChange = async (value: string) => {
+    if (value !== 'lbs' && value !== 'kg') return;
+    setSavingWeightUnit(true);
+    setMessage('');
+    try {
+      await updatePreferences({ weightUnit: value });
+      setMessage(`Weight unit set to ${value}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to update weight unit');
+    } finally {
+      setSavingWeightUnit(false);
+    }
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -86,6 +101,29 @@ export function SettingsPage() {
                   {option.label}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Units</CardTitle>
+          <CardDescription>Weight unit for lifting templates and logging</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Label htmlFor="weight-unit">Weight</Label>
+          <Select
+            value={user?.weightUnit ?? 'lbs'}
+            onValueChange={(value) => void handleWeightUnitChange(value)}
+            disabled={savingWeightUnit}
+          >
+            <SelectTrigger id="weight-unit" className="w-full">
+              <SelectValue placeholder="Select unit" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lbs">lbs</SelectItem>
+              <SelectItem value="kg">kg</SelectItem>
             </SelectContent>
           </Select>
         </CardContent>

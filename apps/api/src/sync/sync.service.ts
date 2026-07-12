@@ -223,7 +223,9 @@ export class SyncService {
           }
         } else if (entityType === 'food_log_entries') {
           if (action === 'delete') {
-            results.push(await this.foodLogsService.remove(userId, entityId));
+            results.push(
+              await this.foodLogsService.remove(userId, entityId, undefined, { syncPlan: true }),
+            );
           } else if (action === 'create') {
             results.push(
               await this.foodLogsService.create(userId, payload as never, entityId),
