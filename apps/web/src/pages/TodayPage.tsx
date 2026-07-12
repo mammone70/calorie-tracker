@@ -7,7 +7,7 @@ import { confirmedFoodLogs, formatHeaderDate, formatNutrientsSummary } from '@ca
 import { DailyFoodLog, ensureWeeklyMealsForDate } from '../components/DailyFoodLog';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/client';
-import { todayDateString, computeNutrients, sumNutrients } from '@calorie-tracker/client';
+import { todayDateString, computeNutrients, quantityToGrams, sumNutrients } from '@calorie-tracker/client';
 import type { EffectiveMacroTarget, EffectiveMealPlan, Food, FoodLogEntry, Nutrients } from '@calorie-tracker/shared';
 
 export function TodayPage() {
@@ -45,8 +45,10 @@ export function TodayPage() {
     confirmedLogs.map((log) => {
       const food = foodsMap.get(log.foodId);
       if (!food) return { calories: 0, protein: 0, fat: 0, carbs: 0 };
-      const grams = log.unit === 'g' ? log.quantity : log.quantity;
-      return computeNutrients(food.nutrientsPer100g, grams);
+      return computeNutrients(
+        food.nutrientsPer100g,
+        quantityToGrams(food, log.quantity, log.unit),
+      );
     }),
   );
 
@@ -113,11 +115,16 @@ export function TodayPage() {
       </div>
 
       <section>
-        <h2 className="mb-1 text-lg font-bold">Today&apos;s meals</h2>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Pre-filled from your meal plan. Confirm each food when you eat it — edit amounts or remove
-          anything that changed today.
-        </p>
+        <h2 className="group relative mb-3 w-fit cursor-help text-lg font-bold">
+          Today&apos;s meals
+          <span
+            role="tooltip"
+            className="pointer-events-none absolute left-0 top-full z-10 mt-1 w-64 rounded-md border border-border bg-popover px-3 py-2 text-xs font-normal leading-snug text-popover-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+          >
+            Pre-filled from your meal plan. Confirm each food when you eat it — edit amounts or
+            remove anything that changed today.
+          </span>
+        </h2>
         <DailyFoodLog
           date={today}
           foodsMap={foodsMap}

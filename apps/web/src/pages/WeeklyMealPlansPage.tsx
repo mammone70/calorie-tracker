@@ -14,10 +14,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FoodPicker } from '../components/FoodPicker';
+import { FoodQuantityFields } from '../components/FoodQuantityFields';
 import { MacroProgress } from '../components/MacroProgress';
-import { NutrientsSummary, FoodAmountNutrients } from '../components/NutrientsSummary';
+import { NutrientsSummary } from '../components/NutrientsSummary';
 import { PageHeader } from '../components/PageHeader';
 import { cn, inputFieldClass } from '@/lib/utils';
+import { GRAMS_UNIT } from '@/lib/food-units';
 import { nutrientsForQuantity, sumNutrients } from '@calorie-tracker/client';
 import { api, localStore } from '../lib/client';
 import {
@@ -69,6 +71,7 @@ export function WeeklyMealPlansPage({
   const [addFoodMealId, setAddFoodMealId] = useState('');
   const [dialogError, setDialogError] = useState('');
   const [quantity, setQuantity] = useState('100');
+  const [unit, setUnit] = useState(GRAMS_UNIT);
   const [message, setMessage] = useState('');
   const [messageIsError, setMessageIsError] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -138,7 +141,7 @@ export function WeeklyMealPlansPage({
     return sumNutrients(
       entries.map((entry) => {
         const food = foodsMap.get(entry.foodId);
-        return nutrientsForQuantity(food, entryQuantities[entry.id], entry.quantity);
+        return nutrientsForQuantity(food, entryQuantities[entry.id], entry.quantity, entry.unit);
       }),
     );
   }, [activeMeals, entriesByMealId, foodsMap, entryQuantities]);
@@ -265,12 +268,14 @@ export function WeeklyMealPlansPage({
     setAddFoodMealId(meal.id);
     setFoodId('');
     setQuantity('100');
+    setUnit(GRAMS_UNIT);
     setDialogError('');
   };
 
   const closeAddFoodDialog = () => {
     setAddFoodMealId('');
     setFoodId('');
+    setUnit(GRAMS_UNIT);
     setDialogError('');
   };
 
@@ -283,7 +288,7 @@ export function WeeklyMealPlansPage({
     }
     const qty = Number(quantity);
     if (!Number.isFinite(qty) || qty <= 0) {
-      setDialogError('Enter a valid quantity in grams');
+      setDialogError('Enter a valid amount');
       return;
     }
 
@@ -296,7 +301,7 @@ export function WeeklyMealPlansPage({
         weeklyMealId: activeMealId,
         foodId,
         quantity: qty,
-        unit: 'g',
+        unit,
       };
 
       if (useLocalStore) {
@@ -310,6 +315,7 @@ export function WeeklyMealPlansPage({
       setMessage('Added to weekly template');
       setMessageIsError(false);
       setQuantity('100');
+      setUnit(GRAMS_UNIT);
       setFoodId('');
       closeAddFoodDialog();
     } catch (error) {
@@ -489,7 +495,7 @@ export function WeeklyMealPlansPage({
             const mealNutrients = sumNutrients(
               mealEntries.map((entry) => {
                 const food = foodsMap.get(entry.foodId);
-                return nutrientsForQuantity(food, entryQuantities[entry.id], entry.quantity);
+                return nutrientsForQuantity(food, entryQuantities[entry.id], entry.quantity, entry.unit);
               }),
             );
             return (
@@ -537,6 +543,7 @@ export function WeeklyMealPlansPage({
                           food,
                           entryQuantities[entry.id],
                           entry.quantity,
+                          entry.unit,
                         );
                         return (
                           <li
@@ -614,28 +621,25 @@ export function WeeklyMealPlansPage({
                   id="add-food-select"
                   foods={foodsQuery.data ?? []}
                   value={foodId}
-                  onChange={setFoodId}
+                  onChange={(nextId) => {
+                    setFoodId(nextId);
+                    setUnit(GRAMS_UNIT);
+                    setQuantity('100');
+                  }}
                 />
               </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="add-food-quantity" className="text-sm font-medium">
-                  Quantity (g)
-                </Label>
-                <Input
-                  id="add-food-quantity"
-                  placeholder="e.g. 100"
-                  inputMode="decimal"
-                  className={inputFieldClass}
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                />
-              </div>
-
-              <FoodAmountNutrients
+              <FoodQuantityFields
                 food={(foodsQuery.data ?? []).find((food) => food.id === foodId)}
                 quantity={quantity}
-                className="text-sm"
+                unit={unit}
+                onQuantityChange={setQuantity}
+                onUnitChange={(nextUnit) => {
+                  setUnit(nextUnit);
+                  setQuantity(nextUnit === GRAMS_UNIT ? '100' : '1');
+                }}
+                quantityId="add-food-quantity"
+                unitId="add-food-unit"
               />
 
               {dialogError && <p className="text-sm text-destructive">{dialogError}</p>}

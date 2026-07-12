@@ -107,8 +107,15 @@ export class WeeklyMealPlansController {
     @Param('id') id: string,
   ) {
     const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    const timeZone = resolveRequestTimeZone(req.headers);
     const dayOfWeek = await this.foodLogsService.getDayOfWeekForWeeklyMealPlanEntry(userId, id);
     const removed = await this.service.remove(userId, id);
+    await this.foodLogsService.removePendingLogsForWeeklyPlanFood(
+      userId,
+      removed.weeklyMealId,
+      removed.foodId,
+      timeZone,
+    );
     await this.syncFutureDays(userId, dayOfWeek, req.headers);
     return removed;
   }

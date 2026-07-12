@@ -223,12 +223,20 @@ export class ApiClient {
     return this.request(withForUserId('/foods', options.forUserId));
   }
 
+  getFood(id: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/foods/${id}`, options.forUserId));
+  }
+
   searchFoods(q: string) {
     return this.request(`/foods/search?q=${encodeURIComponent(q)}`);
   }
 
   createFood(body: unknown) {
     return this.request('/foods', { method: 'POST', body });
+  }
+
+  updateFood(id: string, body: unknown) {
+    return this.request(`/foods/${id}`, { method: 'PATCH', body });
   }
 
   getMealPlans(date: string, options: ForUserOptions = {}) {
@@ -250,6 +258,44 @@ export class ApiClient {
     return this.request(withForUserId('/meal-plans/reset-to-weekly', options.forUserId), {
       method: 'POST',
       body: { date },
+    });
+  }
+
+  setDayMealCount(body: { planDate: string; mealCount: number }, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/day-meals/set-count', options.forUserId), {
+      method: 'POST',
+      body,
+    });
+  }
+
+  getDayMeals(date: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/day-meals?date=${encodeURIComponent(date)}`, options.forUserId));
+  }
+
+  createDayMeal(
+    body: { planDate: string; mealIndex: number; name: string; mealTime?: string | null },
+    options: ForUserOptions = {},
+  ) {
+    return this.request(withForUserId('/day-meals', options.forUserId), {
+      method: 'POST',
+      body,
+    });
+  }
+
+  updateDayMeal(
+    id: string,
+    body: Partial<{ planDate: string; mealIndex: number; name: string; mealTime?: string | null }>,
+    options: ForUserOptions = {},
+  ) {
+    return this.request(withForUserId(`/day-meals/${id}`, options.forUserId), {
+      method: 'PATCH',
+      body,
+    });
+  }
+
+  deleteDayMeal(id: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/day-meals/${id}`, options.forUserId), {
+      method: 'DELETE',
     });
   }
 

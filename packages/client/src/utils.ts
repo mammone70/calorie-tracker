@@ -45,13 +45,34 @@ export function sumNutrients(
 
 const zeroNutrients = { calories: 0, protein: 0, fat: 0, carbs: 0 };
 
+export function quantityToGrams(
+  food:
+    | {
+        servingSizes?: Array<{ label: string; grams: number }> | null;
+      }
+    | undefined,
+  quantity: number,
+  unit = 'g',
+) {
+  if (!Number.isFinite(quantity) || quantity <= 0) return 0;
+  if (!unit || unit === 'g') return quantity;
+  const serving = food?.servingSizes?.find((item) => item.label === unit);
+  return serving ? quantity * serving.grams : quantity;
+}
+
 export function nutrientsForQuantity(
-  food: { nutrientsPer100g: { calories: number; protein: number; fat: number; carbs: number } } | undefined,
+  food:
+    | {
+        nutrientsPer100g: { calories: number; protein: number; fat: number; carbs: number };
+        servingSizes?: Array<{ label: string; grams: number }> | null;
+      }
+    | undefined,
   rawQty: string | undefined,
   fallbackQty: number,
+  unit = 'g',
 ) {
   if (!food) return zeroNutrients;
   const qty = Number(rawQty ?? String(fallbackQty));
   if (!Number.isFinite(qty) || qty <= 0) return zeroNutrients;
-  return computeNutrients(food.nutrientsPer100g, qty);
+  return computeNutrients(food.nutrientsPer100g, quantityToGrams(food, qty, unit));
 }

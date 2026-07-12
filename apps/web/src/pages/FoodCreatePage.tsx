@@ -1,151 +1,47 @@
-import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { macroCaloriesError } from '@calorie-tracker/shared';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { MacroCaloriesFeedback, MacroCaloriesInput } from '../components/MacroCaloriesFeedback';
+import { FoodForm, type FoodFormValues } from '../components/FoodForm';
 import { PageHeader } from '../components/PageHeader';
-import { useMacroCaloriesValidation } from '../hooks/useMacroCaloriesValidation';
 import { api, localStore } from '../lib/client';
 import { todayDateString } from '@calorie-tracker/client';
-import { cn } from '@/lib/utils';
 
 export function FoodCreatePage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [name, setName] = useState('');
-  const [brand, setBrand] = useState('');
-  const [calories, setCalories] = useState('');
-  const [protein, setProtein] = useState('');
-  const [fat, setFat] = useState('');
-  const [carbs, setCarbs] = useState('');
-  const [message, setMessage] = useState('');
-  const [messageIsError, setMessageIsError] = useState(false);
 
-  const macroValidation = useMacroCaloriesValidation({ calories, protein, fat, carbs });
-  const macroFieldsInvalid = macroValidation.show && !macroValidation.isValid;
+  const handleSubmit = async (values: FoodFormValues) => {
+    const userId = api.getUserId();
+    let foodId: string;
 
-  const handleSave = async () => {
-    if (!name) {
-      setMessage('Food name is required');
-      setMessageIsError(true);
-      return;
+    if (userId) {
+      const food = await localStore.localCreateFood(userId, {
+        name: values.name,
+        brand: values.brand,
+        source: 'user',
+        nutrientsPer100g: values.nutrientsPer100g,
+        servingSizes: values.servingSizes.length > 0 ? values.servingSizes : undefined,
+      });
+      foodId = food.id;
+    } else {
+      const food = (await api.createFood({
+        name: values.name,
+        brand: values.brand,
+        source: 'user',
+        nutrientsPer100g: values.nutrientsPer100g,
+        servingSizes: values.servingSizes.length > 0 ? values.servingSizes : undefined,
+      })) as { id: string };
+      foodId = food.id;
     }
 
-    const nutrientsPer100g = {
-      calories: Number(calories) || 0,
-      protein: Number(protein) || 0,
-      fat: Number(fat) || 0,
-      carbs: Number(carbs) || 0,
-    };
-
-    const validationError = macroCaloriesError(
-      nutrientsPer100g.calories,
-      nutrientsPer100g.protein,
-      nutrientsPer100g.fat,
-      nutrientsPer100g.carbs,
-    );
-    if (validationError) {
-      setMessage(validationError);
-      setMessageIsError(true);
-      return;
-    }
-
-    setMessage('');
-    setMessageIsError(false);
-    try {
-      const userId = api.getUserId();
-      let foodId: string;
-
-      if (userId) {
-        const food = await localStore.localCreateFood(userId, {
-          name,
-          brand: brand || undefined,
-          source: 'user',
-          nutrientsPer100g,
-        });
-        foodId = food.id;
-      } else {
-        const food = (await api.createFood({
-          name,
-          brand: brand || undefined,
-          source: 'user',
-          nutrientsPer100g,
-        })) as { id: string };
-        foodId = food.id;
-      }
-
-      await queryClient.invalidateQueries({ queryKey: ['foods'] });
-
-      setMessage('Food saved — choose a meal to log it');
-      setMessageIsError(false);
-      setTimeout(
-        () => navigate(`/foods/log?foodId=${foodId}&date=${todayDateString()}`),
-        800,
-      );
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Failed to save');
-      setMessageIsError(true);
-    }
+    await queryClient.invalidateQueries({ queryKey: ['foods'] });
+    navigate(`/foods/log?foodId=${foodId}&date=${todayDateString()}`);
   };
 
   return (
     <div>
       <PageHeader title="Add Food" backTo="/foods" />
-      <div className="mx-auto w-full min-w-0 max-w-lg px-4 pb-8">
-        <p className="my-4 text-muted-foreground">
-          Enter nutrition values per 100g. Calories should equal protein×4 + carbs×4 + fat×9.
-        </p>
-        {message && (
-          <p className={cn('mb-4 text-sm', messageIsError ? 'text-destructive' : 'text-primary')}>
-            {message}
-          </p>
-        )}
-
-        <div className="space-y-3">
-          <Input placeholder="Food name *" value={name} onChange={(e) => setName(e.target.value)} />
-          <Input
-            placeholder="Brand (optional)"
-            value={brand}
-            onChange={(e) => setBrand(e.target.value)}
-          />
-          <MacroCaloriesInput
-            value={calories}
-            onChange={setCalories}
-            placeholder="Calories"
-            invalid={macroFieldsInvalid}
-          />
-          <MacroCaloriesInput
-            value={protein}
-            onChange={setProtein}
-            placeholder="Protein (g)"
-            invalid={macroFieldsInvalid}
-          />
-          <MacroCaloriesInput
-            value={fat}
-            onChange={setFat}
-            placeholder="Fat (g)"
-            invalid={macroFieldsInvalid}
-          />
-          <MacroCaloriesInput
-            value={carbs}
-            onChange={setCarbs}
-            placeholder="Carbs (g)"
-            invalid={macroFieldsInvalid}
-          />
-          <MacroCaloriesFeedback validation={macroValidation} className="mb-1" />
-
-          <Button
-            type="button"
-            className="mt-2 w-full"
-            size="lg"
-            onClick={handleSave}
-            disabled={macroFieldsInvalid}
-          >
-            Save food
-          </Button>
-        </div>
+      <div className="mx-auto w-full min-w-0 max-w-lg px-4 pb-8 pt-4">
+        <FoodForm submitLabel="Save food" onSubmit={handleSubmit} />
       </div>
     </div>
   );

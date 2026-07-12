@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import type {
   CreateFoodInput,
+  UpdateFoodInput,
   MacroTargetInput,
   FoodLogEntryInput,
   WeeklyMacroTargetInput,
@@ -170,7 +171,65 @@ export function createLocalStore(api: ApiClient, db: LocalDatabase, sync: SyncEn
       // queued for later
     }
 
-    return { ...record, nutrientsPer100g: input.nutrientsPer100g };
+    return { ...record, nutrientsPer100g: input.nutrientsPer100g, servingSizes: input.servingSizes };
+  }
+
+  async function localUpdateFood(userId: string, id: string, input: UpdateFoodInput) {
+    const foods = await localGetFoods(userId);
+    const existing = foods.find((food) => food.id === id);
+    if (!existing) throw new Error('Food not found');
+
+    const nutrientsPer100g = input.nutrientsPer100g ?? existing.nutrientsPer100g;
+    const validationError = macroCaloriesError(
+      nutrientsPer100g.calories,
+      nutrientsPer100g.protein,
+      nutrientsPer100g.fat,
+      nutrientsPer100g.carbs,
+    );
+    if (validationError) throw new Error(validationError);
+
+    const now = new Date().toISOString();
+    const nextServingSizes =
+      input.servingSizes !== undefined ? input.servingSizes : existing.servingSizes;
+
+    const record = {
+      id,
+      userId,
+      name: input.name ?? existing.name,
+      brand: input.brand !== undefined ? input.brand || null : (existing.brand ?? null),
+      source: input.source ?? existing.source,
+      externalId:
+        input.externalId !== undefined
+          ? (input.externalId ?? null)
+          : (existing.externalId ?? null),
+      nutrientsPer100g: JSON.stringify(nutrientsPer100g),
+      servingSizes: nextServingSizes ? JSON.stringify(nextServingSizes) : null,
+      createdAt: existing.createdAt,
+      updatedAt: now,
+      deletedAt: existing.deletedAt ?? null,
+    };
+
+    await db.insertFood(record);
+
+    await queueMutation({
+      entityType: 'foods',
+      entityId: id,
+      action: 'update',
+      payload: input as unknown as Record<string, unknown>,
+      clientUpdatedAt: now,
+    });
+
+    try {
+      await runSync();
+    } catch {
+      // queued for later
+    }
+
+    return {
+      ...record,
+      nutrientsPer100g,
+      servingSizes: nextServingSizes,
+    };
   }
 
   async function localCreateFoodLog(userId: string, input: FoodLogEntryInput) {
@@ -614,6 +673,7 @@ export function createLocalStore(api: ApiClient, db: LocalDatabase, sync: SyncEn
     localUpdateWeeklyMeal,
     localSetWeeklyMealCount,
     localCreateFood,
+    localUpdateFood,
     localCreateFoodLog,
     localUpdateFoodLog,
     localConfirmFoodLog,

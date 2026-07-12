@@ -29,6 +29,23 @@
     @apply text-base;
   }
 
+  select {
+    color-scheme: inherit;
+  }
+
+  select option {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
+
+  :root {
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
   .theme {
     --font-heading: var(--font-sans);
     --tracking-tighter: calc(var(--tracking-normal) - 0.05em);

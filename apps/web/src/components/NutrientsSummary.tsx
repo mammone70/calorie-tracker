@@ -19,15 +19,21 @@ export function NutrientsSummary({ nutrients, className }: NutrientsSummaryProps
 type FoodAmountNutrientsProps = {
   food: Food | undefined;
   quantity: string;
+  unit?: string;
   className?: string;
 };
 
-export function FoodAmountNutrients({ food, quantity, className }: FoodAmountNutrientsProps) {
+export function FoodAmountNutrients({
+  food,
+  quantity,
+  unit = 'g',
+  className,
+}: FoodAmountNutrientsProps) {
   if (!food) return null;
 
   return (
     <NutrientsSummary
-      nutrients={nutrientsForQuantity(food, quantity, 100)}
+      nutrients={nutrientsForQuantity(food, quantity, 100, unit)}
       className={className}
     />
   );

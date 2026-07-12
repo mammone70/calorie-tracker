@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import { Check, ChevronDown, Loader2, Minus, X } from 'lucide-react';
 import {
   DEFAULT_MEAL_COUNT,
+  MAX_MEALS_PER_DAY,
+  MIN_MEALS_PER_DAY,
   dayOfWeekFromDate,
   defaultMealName,
   formatMealTime,
@@ -11,7 +13,9 @@ import {
   groupFoodLogsByMeal,
   loggedAtForDate,
   mealRefFromEffectiveMeal,
+  type DayMeal,
   type EffectiveMealBlock,
+  type EffectiveMealPlan,
   type Food,
   type FoodLogEntry,
   type WeekdayIndex,
@@ -32,9 +36,11 @@ import { Label } from '@/components/ui/label';
 import { cn, inputFieldClass } from '@/lib/utils';
 import { showErrorFromUnknown, showSuccess } from '@/lib/toast';
 import { nutrientsForQuantity, sumNutrients } from '@calorie-tracker/client';
-import { NutrientsSummary, FoodAmountNutrients } from './NutrientsSummary';
+import { NutrientsSummary } from './NutrientsSummary';
 import { FoodPicker } from './FoodPicker';
+import { FoodQuantityFields } from './FoodQuantityFields';
 import { api, localStore } from '../lib/client';
+import { GRAMS_UNIT } from '@/lib/food-units';
 
 type DailyFoodLogProps = {
   date: string;
@@ -63,6 +69,7 @@ export function DailyFoodLog({
   const [addFoodMealId, setAddFoodMealId] = useState('');
   const [foodId, setFoodId] = useState(preselectedFoodId ?? '');
   const [quantity, setQuantity] = useState('100');
+  const [unit, setUnit] = useState(GRAMS_UNIT);
   const [dialogError, setDialogError] = useState('');
   const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -70,6 +77,9 @@ export function DailyFoodLog({
   const [messageIsError, setMessageIsError] = useState(false);
   const [busyLogIds, setBusyLogIds] = useState<Record<string, boolean>>({});
   const [collapsedMeals, setCollapsedMeals] = useState<Record<string, boolean>>({});
+  const [addMealOpen, setAddMealOpen] = useState(false);
+  const [newMealName, setNewMealName] = useState('');
+  const [addMealError, setAddMealError] = useState('');
 
   const foodsQuery = useQuery({
     queryKey: ['foods'],
@@ -151,13 +161,8 @@ export function DailyFoodLog({
     }
     if (qty === log.quantity) return;
 
-    const userId = api.getUserId();
     await runMutation(async () => {
-      if (userId) {
-        await localStore.localUpdateFoodLog(userId, log.id, { quantity: qty });
-      } else {
-        await api.updateFoodLog(log.id, { quantity: qty });
-      }
+      await api.updateFoodLog(log.id, { quantity: qty });
     });
   };
 
@@ -167,12 +172,7 @@ export function DailyFoodLog({
     );
     setLogBusy(id, true);
     try {
-      const userId = api.getUserId();
-      if (userId) {
-        await localStore.localConfirmFoodLog(userId, id);
-      } else {
-        await api.confirmFoodLog(id);
-      }
+      await api.confirmFoodLog(id);
       if (toast) showSuccess('Confirmed');
       await queryClient.invalidateQueries({ queryKey: ['food-logs', date] });
     } catch (error) {
@@ -190,12 +190,7 @@ export function DailyFoodLog({
     );
     setLogBusy(id, true);
     try {
-      const userId = api.getUserId();
-      if (userId) {
-        await localStore.localUnconfirmFoodLog(userId, id);
-      } else {
-        await api.updateFoodLog(id, { status: 'pending' });
-      }
+      await api.updateFoodLog(id, { status: 'pending' });
       showSuccess('Unconfirmed');
       await queryClient.invalidateQueries({ queryKey: ['food-logs', date] });
     } catch (error) {
@@ -214,12 +209,7 @@ export function DailyFoodLog({
     );
     setLogBusy(id, true);
     try {
-      const userId = api.getUserId();
-      if (userId) {
-        await localStore.localRemoveFoodLog(userId, id);
-      } else {
-        await api.deleteFoodLog(id);
-      }
+      await api.deleteFoodLog(id);
       showSuccess('Removed');
       await queryClient.invalidateQueries({ queryKey: ['food-logs', date] });
     } catch (error) {
@@ -237,16 +227,11 @@ export function DailyFoodLog({
     setSaving(true);
     setMessage('');
     try {
-      const userId = api.getUserId();
       for (const log of pending) {
         const raw = draftQuantities[log.id];
         const qty = Number(raw);
         if (Number.isFinite(qty) && qty > 0 && qty !== log.quantity) {
-          if (userId) {
-            await localStore.localUpdateFoodLog(userId, log.id, { quantity: qty });
-          } else {
-            await api.updateFoodLog(log.id, { quantity: qty });
-          }
+          await api.updateFoodLog(log.id, { quantity: qty });
         }
 
         await confirmLog(log.id, { toast: false });
@@ -281,11 +266,13 @@ export function DailyFoodLog({
     setAddFoodMealId(meal.id);
     setFoodId(preselectedFoodId ?? '');
     setQuantity('100');
+    setUnit(GRAMS_UNIT);
     setDialogError('');
   };
 
   const closeAddFoodDialog = () => {
     setAddFoodMealId('');
+    setUnit(GRAMS_UNIT);
     setDialogError('');
   };
 
@@ -298,43 +285,149 @@ export function DailyFoodLog({
     }));
   };
 
+  const invalidateDayQueries = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['food-logs', date] }),
+      queryClient.invalidateQueries({ queryKey: ['meal-plans-effective', date] }),
+      queryClient.invalidateQueries({ queryKey: ['meal-plans', date] }),
+    ]);
+  };
+
+  const ensureDayOverride = async () => {
+    const isWeekly = meals.some((meal) => meal.source === 'weekly');
+    if (!isWeekly) return;
+    await api.materializeWeeklyMealPlan(date);
+  };
+
+  const resolveMealForLogging = async (meal: EffectiveMealBlock): Promise<EffectiveMealBlock> => {
+    // If this day already has a day override, always log against current day meals.
+    // If still on the weekly template, keep weekly meal ids — do not rematerialize mid-add.
+    if (meal.source === 'override') {
+      const plan = (await api.getEffectiveMealPlans(date)) as EffectiveMealPlan;
+      const resolved =
+        plan.meals.find((item) => item.id === meal.id) ??
+        plan.meals.find((item) => item.mealIndex === meal.mealIndex);
+      if (!resolved) throw new Error('Meal not found for this day');
+      return resolved;
+    }
+    return meal;
+  };
+
+  const openAddMealDialog = () => {
+    setNewMealName(defaultMealName(meals.length));
+    setAddMealError('');
+    setAddMealOpen(true);
+  };
+
+  const closeAddMealDialog = () => {
+    setAddMealOpen(false);
+    setAddMealError('');
+  };
+
+  const addMeal = async () => {
+    const name = newMealName.trim();
+    if (!name) {
+      setAddMealError('Meal name is required');
+      return;
+    }
+    if (meals.length >= MAX_MEALS_PER_DAY) {
+      setAddMealError(`Maximum of ${MAX_MEALS_PER_DAY} meals`);
+      return;
+    }
+
+    setSaving(true);
+    setAddMealError('');
+    try {
+      await ensureDayOverride();
+      const dayMeals = (await api.getDayMeals(date)) as DayMeal[];
+      const nextIndex =
+        dayMeals.reduce((max, meal) => Math.max(max, meal.mealIndex), -1) + 1;
+      await api.createDayMeal({
+        planDate: date,
+        mealIndex: nextIndex,
+        name,
+      });
+      await api.materializeFoodLogsFromPlan(date);
+      await invalidateDayQueries();
+      closeAddMealDialog();
+      showSuccess('Meal added');
+    } catch (error) {
+      setAddMealError(error instanceof Error ? error.message : 'Failed to add meal');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeMeal = async (meal: EffectiveMealBlock) => {
+    if (meals.length <= MIN_MEALS_PER_DAY) {
+      showErrorFromUnknown(new Error(`Keep at least ${MIN_MEALS_PER_DAY} meal`));
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await ensureDayOverride();
+      const dayMeals = (await api.getDayMeals(date)) as DayMeal[];
+      const target =
+        dayMeals.find((item) => item.id === meal.id) ??
+        dayMeals.find((item) => item.mealIndex === meal.mealIndex);
+      if (!target) throw new Error('Meal not found');
+
+      await api.deleteDayMeal(target.id);
+      await api.materializeFoodLogsFromPlan(date);
+      await invalidateDayQueries();
+      showSuccess('Meal removed');
+    } catch (error) {
+      showErrorFromUnknown(error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const addFoodMeal = meals.find((meal) => meal.id === addFoodMealId);
 
   const addFood = async () => {
-    const meal = meals.find((item) => item.id === activeMealId);
-    if (!meal || !foodId) {
+    const selectedMeal = meals.find((item) => item.id === activeMealId);
+    if (!selectedMeal || !foodId) {
       setDialogError('Select a food');
       return;
     }
 
     const qty = Number(quantity);
     if (!Number.isFinite(qty) || qty <= 0) {
-      setDialogError('Enter a valid quantity in grams');
+      setDialogError('Enter a valid amount');
       return;
     }
 
     setSaving(true);
     setDialogError('');
     try {
-      const userId = api.getUserId();
+      const meal = await resolveMealForLogging(selectedMeal);
       const input = {
         loggedAt: loggedAtForDate(date, meal.mealTime, getClientTimeZone()),
         ...mealRefFromEffectiveMeal(meal),
         foodId,
         quantity: qty,
-        unit: 'g',
-        status: 'confirmed' as const,
+        unit,
+        status: 'pending' as const,
       };
 
-      if (userId) {
-        await localStore.localCreateFoodLog(userId, input);
-      } else {
-        await api.createFoodLog(input);
-      }
+      // Prefer the API so the log is persisted server-side before we refresh the list.
+      // Offline local-store sync was succeeding locally then failing validation on push,
+      // so the subsequent refetch wiped the food from the UI.
+      const created = (await api.createFoodLog(input)) as FoodLogEntry;
 
-      await queryClient.invalidateQueries({ queryKey: ['food-logs', date] });
+      queryClient.setQueryData<FoodLogEntry[]>(['food-logs', date], (current) => {
+        const existing = current ?? [];
+        if (existing.some((log) => log.id === created.id)) return existing;
+        return [...existing, created];
+      });
+      setCollapsedMeals((prev) => ({ ...prev, [meal.id]: false }));
+
+      await queryClient.refetchQueries({ queryKey: ['food-logs', date] });
       showSuccess('Food logged');
       setQuantity('100');
+      setUnit(GRAMS_UNIT);
       setFoodId('');
       closeAddFoodDialog();
     } catch (error) {
@@ -383,7 +476,12 @@ export function DailyFoodLog({
           const mealNutrients = sumNutrients(
             meal.logs.map((log) => {
               const food = foodsMap.get(log.foodId);
-              return nutrientsForQuantity(food, draftQuantities[log.id], log.quantity);
+              return nutrientsForQuantity(
+                food,
+                draftQuantities[log.id],
+                log.quantity,
+                log.unit,
+              );
             }),
           );
           const isCollapsed = isMealCollapsed(meal.id);
@@ -391,32 +489,44 @@ export function DailyFoodLog({
           return (
             <Card key={meal.id}>
               <CardHeader className="space-y-2 pb-2">
-                <button
-                  type="button"
-                  className="flex w-full flex-row items-start justify-between gap-2 text-left"
-                  onClick={() => toggleMealCollapsed(meal.id)}
-                  aria-expanded={!isCollapsed}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <ChevronDown
-                        className={cn(
-                          'size-4 shrink-0 text-muted-foreground transition-transform',
-                          isCollapsed && '-rotate-90',
-                        )}
-                      />
-                      <CardTitle className="text-base">{meal.name}</CardTitle>
+                <div className="flex items-start gap-2">
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 flex-row items-start justify-between gap-2 text-left"
+                    onClick={() => toggleMealCollapsed(meal.id)}
+                    aria-expanded={!isCollapsed}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <ChevronDown
+                          className={cn(
+                            'size-4 shrink-0 text-muted-foreground transition-transform',
+                            isCollapsed && '-rotate-90',
+                          )}
+                        />
+                        <CardTitle className="text-base">{meal.name}</CardTitle>
+                      </div>
+                      {meal.logs.length > 0 && (
+                        <NutrientsSummary nutrients={mealNutrients} className="mt-1 pl-6" />
+                      )}
                     </div>
-                    {meal.logs.length > 0 && (
-                      <NutrientsSummary nutrients={mealNutrients} className="mt-1 pl-6" />
+                    {formatMealTime(meal.mealTime) && (
+                      <span className="shrink-0 text-sm text-muted-foreground">
+                        {formatMealTime(meal.mealTime)}
+                      </span>
                     )}
-                  </div>
-                  {formatMealTime(meal.mealTime) && (
-                    <span className="shrink-0 text-sm text-muted-foreground">
-                      {formatMealTime(meal.mealTime)}
-                    </span>
-                  )}
-                </button>
+                  </button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    disabled={saving || meals.length <= MIN_MEALS_PER_DAY}
+                    onClick={() => void removeMeal(meal)}
+                  >
+                    Remove meal
+                  </Button>
+                </div>
                 {!isCollapsed && mealPendingCount > 0 && (
                   <Button
                     className="w-full"
@@ -444,6 +554,7 @@ export function DailyFoodLog({
                           food,
                           draftQuantities[log.id],
                           log.quantity,
+                          log.unit,
                         );
                         return (
                           <li
@@ -544,6 +655,56 @@ export function DailyFoodLog({
         })}
       </div>
 
+      <div className="mt-3">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          disabled={saving || meals.length >= MAX_MEALS_PER_DAY}
+          onClick={openAddMealDialog}
+        >
+          Add meal
+        </Button>
+      </div>
+
+      <Dialog
+        open={addMealOpen}
+        onOpenChange={(open) => {
+          if (!open) closeAddMealDialog();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add meal</DialogTitle>
+            <DialogDescription>Name this meal for {date}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="new-meal-name" className="text-sm font-medium">
+                Meal name
+              </Label>
+              <Input
+                id="new-meal-name"
+                className={cn(inputFieldClass, 'mb-0')}
+                value={newMealName}
+                onChange={(e) => setNewMealName(e.target.value)}
+                placeholder="e.g. Breakfast"
+                autoFocus
+              />
+            </div>
+            {addMealError && <p className="text-sm text-destructive">{addMealError}</p>}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeAddMealDialog}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void addMeal()} disabled={saving}>
+              {saving ? 'Adding…' : 'Add meal'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {showAddFood && (
         <Dialog
           open={!!addFoodMealId}
@@ -566,28 +727,25 @@ export function DailyFoodLog({
                   id="log-food-select"
                   foods={foodsQuery.data ?? []}
                   value={foodId}
-                  onChange={setFoodId}
+                  onChange={(nextId) => {
+                    setFoodId(nextId);
+                    setUnit(GRAMS_UNIT);
+                    setQuantity('100');
+                  }}
                 />
               </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="log-food-quantity" className="text-sm font-medium">
-                  Quantity (g)
-                </Label>
-                <Input
-                  id="log-food-quantity"
-                  placeholder="e.g. 100"
-                  inputMode="decimal"
-                  className={inputFieldClass}
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                />
-              </div>
-
-              <FoodAmountNutrients
+              <FoodQuantityFields
                 food={(foodsQuery.data ?? []).find((food) => food.id === foodId)}
                 quantity={quantity}
-                className="text-sm"
+                unit={unit}
+                onQuantityChange={setQuantity}
+                onUnitChange={(nextUnit) => {
+                  setUnit(nextUnit);
+                  setQuantity(nextUnit === GRAMS_UNIT ? '100' : '1');
+                }}
+                quantityId="log-food-quantity"
+                unitId="log-food-unit"
               />
 
               {dialogError && <p className="text-sm text-destructive">{dialogError}</p>}

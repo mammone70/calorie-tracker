@@ -8,6 +8,7 @@ import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { DayDetailPage } from './pages/DayDetailPage';
 import { FoodCreatePage } from './pages/FoodCreatePage';
+import { FoodEditPage } from './pages/FoodEditPage';
 import { FoodSearchPage } from './pages/FoodSearchPage';
 import { FoodsPage } from './pages/FoodsPage';
 import { LoginPage } from './pages/LoginPage';
@@ -40,6 +41,7 @@ export function App() {
           <Route path="/foods/log" element={<LogFoodPage />} />
           <Route path="/foods/search" element={<FoodSearchPage />} />
           <Route path="/foods/new" element={<FoodCreatePage />} />
+          <Route path="/foods/:foodId/edit" element={<FoodEditPage />} />
         </Route>
 
         <Route element={<AdminRoute />}>

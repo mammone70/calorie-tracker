@@ -10,6 +10,7 @@ import {
   Query,
   Req,
   UseGuards,
+  forwardRef,
 } from '@nestjs/common';
 import {
   forUserIdQuerySchema,
@@ -23,12 +24,14 @@ import { type DbClient } from '@calorie-tracker/db';
 import { z } from 'zod';
 import { zodPipe } from '../common/zod-validation.pipe';
 import { resolveActingUserId } from '../common/acting-user';
+import { resolveRequestTimeZone } from '../common/timezone';
 import { JwtAuthGuard, type AuthUser } from '../auth/jwt-auth.guard';
 import { DB } from '../database/database.module';
 import { MealPlansService } from './meal-plans.service';
 import { WeeklyMealPlansService } from './weekly-meal-plans.service';
 import { WeeklyMealsService } from './weekly-meals.service';
 import { DayMealsService } from './day-meals.service';
+import { FoodLogsService } from '../food-logs/food-logs.service';
 
 const dateBodySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -45,6 +48,8 @@ export class MealPlansController {
     private readonly weeklyEntriesService: WeeklyMealPlansService,
     private readonly weeklyMealsService: WeeklyMealsService,
     private readonly dayMealsService: DayMealsService,
+    @Inject(forwardRef(() => FoodLogsService))
+    private readonly foodLogsService: FoodLogsService,
   ) {}
 
   @Get('effective')
@@ -71,18 +76,32 @@ export class MealPlansController {
 
   @Post('materialize-weekly')
   async materializeWeekly(
-    @Req() req: { user: AuthUser },
+    @Req() req: { user: AuthUser; headers: Record<string, string | string[] | undefined> },
     @Query(zodPipe(forUserIdQuerySchema)) query: { forUserId?: string },
     @Body(zodPipe(dateBodySchema)) body: { date: string },
   ) {
     const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    const timeZone = resolveRequestTimeZone(req.headers);
     const existingEntries = await this.service.findByDate(userId, body.date);
     const existingMeals = await this.dayMealsService.findByDate(userId, body.date);
+    const dayOfWeek = dayOfWeekFromDate(body.date);
+
     if (existingEntries.length > 0 || existingMeals.length > 0) {
+      const weeklyMeals = await this.weeklyMealsService.findAll(userId, dayOfWeek);
+      const mealIdMap = new Map<string, string>();
+      for (const weekly of weeklyMeals) {
+        const dayMeal = existingMeals.find((meal) => meal.mealIndex === weekly.mealIndex);
+        if (dayMeal) mealIdMap.set(weekly.id, dayMeal.id);
+      }
+      await this.foodLogsService.remapWeeklyLogsToDayMeals(
+        userId,
+        body.date,
+        mealIdMap,
+        timeZone,
+      );
       return { dayMeals: existingMeals, entries: existingEntries };
     }
 
-    const dayOfWeek = dayOfWeekFromDate(body.date);
     const [weeklyMeals, weeklyEntries] = await Promise.all([
       this.weeklyMealsService.findAll(userId, dayOfWeek),
       this.weeklyEntriesService.findAll(userId, dayOfWeek),
@@ -115,6 +134,8 @@ export class MealPlansController {
         }),
       );
     }
+
+    await this.foodLogsService.remapWeeklyLogsToDayMeals(userId, body.date, mealIdMap, timeZone);
 
     return { dayMeals: createdMeals, entries: createdEntries };
   }

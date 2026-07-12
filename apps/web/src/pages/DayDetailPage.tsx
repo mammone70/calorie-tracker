@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { FoodQuantityFields } from '../components/FoodQuantityFields';
 import { MacroProgress } from '../components/MacroProgress';
 import { MacroCaloriesFeedback, MacroCaloriesInput } from '../components/MacroCaloriesFeedback';
 import { confirmedFoodLogs } from '@calorie-tracker/shared';
@@ -13,7 +14,8 @@ import { PageHeader } from '../components/PageHeader';
 import { useMacroCaloriesValidation } from '../hooks/useMacroCaloriesValidation';
 import { api, localStore } from '../lib/client';
 import { cn, selectClass } from '@/lib/utils';
-import { computeNutrients, sumNutrients } from '@calorie-tracker/client';
+import { GRAMS_UNIT } from '@/lib/food-units';
+import { computeNutrients, quantityToGrams, sumNutrients } from '@calorie-tracker/client';
 import type {
   EffectiveMacroTarget,
   EffectiveMealBlock,
@@ -52,6 +54,7 @@ export function DayDetailPage() {
   const [planFoodId, setPlanFoodId] = useState('');
   const [planActiveMealId, setPlanActiveMealId] = useState('');
   const [planQuantity, setPlanQuantity] = useState('100');
+  const [planUnit, setPlanUnit] = useState(GRAMS_UNIT);
   const [planEntryQuantities, setPlanEntryQuantities] = useState<Record<string, string>>({});
   const [planSaving, setPlanSaving] = useState(false);
 
@@ -119,8 +122,10 @@ export function DayDetailPage() {
       entries.map((entry) => {
         const food = foodsMap.get(entry.foodId);
         if (!food) return { calories: 0, protein: 0, fat: 0, carbs: 0 };
-        const grams = entry.unit === 'g' ? entry.quantity : entry.quantity;
-        return computeNutrients(food.nutrientsPer100g, grams);
+        return computeNutrients(
+          food.nutrientsPer100g,
+          quantityToGrams(food, entry.quantity, entry.unit),
+        );
       }),
     );
 
@@ -156,7 +161,7 @@ export function DayDetailPage() {
     }
     const qty = Number(planQuantity);
     if (!Number.isFinite(qty) || qty <= 0) {
-      setMessage('Enter a valid quantity in grams');
+      setMessage('Enter a valid amount');
       setMessageIsError(true);
       return;
     }
@@ -170,7 +175,7 @@ export function DayDetailPage() {
         dayMealId: planActiveMealId,
         foodId: planFoodId,
         quantity: qty,
-        unit: 'g',
+        unit: planUnit,
       };
 
       if (userId) {
@@ -183,6 +188,7 @@ export function DayDetailPage() {
       setMessage('Added to this day\'s plan');
       setMessageIsError(false);
       setPlanQuantity('100');
+      setPlanUnit(GRAMS_UNIT);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to add');
       setMessageIsError(true);
@@ -560,7 +566,11 @@ export function DayDetailPage() {
                   <select
                     className={selectClass}
                     value={planFoodId}
-                    onChange={(e) => setPlanFoodId(e.target.value)}
+                    onChange={(e) => {
+                      setPlanFoodId(e.target.value);
+                      setPlanUnit(GRAMS_UNIT);
+                      setPlanQuantity('100');
+                    }}
                   >
                     <option value="">Select food…</option>
                     {(foodsQuery.data ?? []).map((food) => (
@@ -570,11 +580,17 @@ export function DayDetailPage() {
                       </option>
                     ))}
                   </select>
-                  <Input
-                    placeholder="Quantity (g)"
-                    inputMode="decimal"
-                    value={planQuantity}
-                    onChange={(e) => setPlanQuantity(e.target.value)}
+                  <FoodQuantityFields
+                    food={(foodsQuery.data ?? []).find((food) => food.id === planFoodId)}
+                    quantity={planQuantity}
+                    unit={planUnit}
+                    onQuantityChange={setPlanQuantity}
+                    onUnitChange={(nextUnit) => {
+                      setPlanUnit(nextUnit);
+                      setPlanQuantity(nextUnit === GRAMS_UNIT ? '100' : '1');
+                    }}
+                    quantityId="plan-food-quantity"
+                    unitId="plan-food-unit"
                   />
                   <Button
                     type="button"

@@ -48,7 +48,7 @@ export function loggedAtForDate(
   mealTime?: string | null,
   timeZone?: string,
 ): string {
-  const time = mealTime ?? '12:00';
+  const time = mealTime && /^\d{2}:\d{2}$/.test(mealTime) ? mealTime : '12:00';
   return zonedDateTimeToUtc(date, `${time}:00`, resolveTimeZone(timeZone)).toISOString();
 }
 

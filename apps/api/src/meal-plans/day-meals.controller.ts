@@ -3,12 +3,14 @@ import {
   Controller,
   Delete,
   Get,
+  Inject,
   Param,
   Patch,
   Post,
   Query,
   Req,
   UseGuards,
+  forwardRef,
 } from '@nestjs/common';
 import {
   dayMealInputSchema,
@@ -20,11 +22,18 @@ import {
 import { zodPipe } from '../common/zod-validation.pipe';
 import { JwtAuthGuard, type AuthUser } from '../auth/jwt-auth.guard';
 import { DayMealsService } from './day-meals.service';
+import { MealPlansService } from './meal-plans.service';
+import { FoodLogsService } from '../food-logs/food-logs.service';
 
 @Controller('day-meals')
 @UseGuards(JwtAuthGuard)
 export class DayMealsController {
-  constructor(private readonly service: DayMealsService) {}
+  constructor(
+    private readonly service: DayMealsService,
+    private readonly mealPlansService: MealPlansService,
+    @Inject(forwardRef(() => FoodLogsService))
+    private readonly foodLogsService: FoodLogsService,
+  ) {}
 
   @Get()
   findByDate(
@@ -35,11 +44,30 @@ export class DayMealsController {
   }
 
   @Post('set-count')
-  setMealCount(
+  async setMealCount(
     @Req() req: { user: AuthUser },
     @Body(zodPipe(setDayMealCountSchema)) body: SetDayMealCountInput,
   ) {
-    return this.service.setMealCount(req.user.userId, body);
+    const userId = req.user.userId;
+    const current = await this.service.findByDate(userId, body.planDate);
+
+    if (current.length > body.mealCount) {
+      const toRemove = current
+        .filter((meal) => meal.mealIndex >= body.mealCount)
+        .sort((a, b) => b.mealIndex - a.mealIndex);
+
+      for (const meal of toRemove) {
+        await this.foodLogsService.removeLogsForDayMeal(userId, meal.id);
+        const planEntries = await this.mealPlansService.findByDate(userId, body.planDate);
+        for (const entry of planEntries) {
+          if (entry.dayMealId === meal.id) {
+            await this.mealPlansService.remove(userId, entry.id);
+          }
+        }
+      }
+    }
+
+    return this.service.setMealCount(userId, body);
   }
 
   @Post()
@@ -60,7 +88,16 @@ export class DayMealsController {
   }
 
   @Delete(':id')
-  remove(@Req() req: { user: AuthUser }, @Param('id') id: string) {
-    return this.service.remove(req.user.userId, id);
+  async remove(@Req() req: { user: AuthUser }, @Param('id') id: string) {
+    const userId = req.user.userId;
+    await this.foodLogsService.removeLogsForDayMeal(userId, id);
+    const removed = await this.service.remove(userId, id);
+    const planEntries = await this.mealPlansService.findByDate(userId, removed.planDate);
+    for (const entry of planEntries) {
+      if (entry.dayMealId === id) {
+        await this.mealPlansService.remove(userId, entry.id);
+      }
+    }
+    return removed;
   }
 }
