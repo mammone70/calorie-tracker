@@ -33,14 +33,14 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { cn, inputFieldClass } from '@/lib/utils';
+import { cn, inputFieldClass, selectClass } from '@/lib/utils';
 import { showErrorFromUnknown, showSuccess } from '@/lib/toast';
 import { nutrientsForQuantity, sumNutrients } from '@calorie-tracker/client';
 import { NutrientsSummary } from './NutrientsSummary';
 import { FoodPicker } from './FoodPicker';
 import { FoodQuantityFields } from './FoodQuantityFields';
 import { api, localStore } from '../lib/client';
-import { GRAMS_UNIT } from '@/lib/food-units';
+import { foodUnitOptions, GRAMS_UNIT } from '@/lib/food-units';
 
 type DailyFoodLogProps = {
   date: string;
@@ -72,6 +72,7 @@ export function DailyFoodLog({
   const [unit, setUnit] = useState(GRAMS_UNIT);
   const [dialogError, setDialogError] = useState('');
   const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
+  const [draftUnits, setDraftUnits] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [messageIsError, setMessageIsError] = useState(false);
@@ -96,11 +97,14 @@ export function DailyFoodLog({
   }, [preselectedFoodId]);
 
   useEffect(() => {
-    const next: Record<string, string> = {};
+    const nextQty: Record<string, string> = {};
+    const nextUnits: Record<string, string> = {};
     for (const log of logs) {
-      next[log.id] = String(log.quantity);
+      nextQty[log.id] = String(log.quantity);
+      nextUnits[log.id] = log.unit;
     }
-    setDraftQuantities(next);
+    setDraftQuantities(nextQty);
+    setDraftUnits(nextUnits);
   }, [logs]);
 
   useEffect(() => {
@@ -139,51 +143,67 @@ export function DailyFoodLog({
     return previous;
   };
 
-  const runMutation = async (fn: () => Promise<unknown>) => {
-    setMessage('');
-    try {
-      await fn();
-      await queryClient.invalidateQueries({ queryKey: ['food-logs', date] });
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Something went wrong');
-      setMessageIsError(true);
-      throw error;
-    }
-  };
-
-  const updateQuantity = async (log: FoodLogEntry) => {
-    const raw = draftQuantities[log.id];
-    const qty = Number(raw);
+  const persistLogAmount = async (
+    log: FoodLogEntry,
+    overrides?: { quantity?: number; unit?: string },
+  ) => {
+    const qty =
+      overrides?.quantity ??
+      Number(draftQuantities[log.id] !== undefined ? draftQuantities[log.id] : log.quantity);
+    const unit = overrides?.unit ?? draftUnits[log.id] ?? log.unit;
     if (!Number.isFinite(qty) || qty <= 0) {
-      setMessage('Enter a valid quantity in grams');
+      setMessage('Enter a valid amount');
       setMessageIsError(true);
+      setDraftQuantities((prev) => ({ ...prev, [log.id]: String(log.quantity) }));
       return;
     }
-    if (qty === log.quantity) return;
+    if (qty === log.quantity && unit === log.unit) return;
 
-    await runMutation(async () => {
-      await api.updateFoodLog(log.id, { quantity: qty });
+    const previous = patchFoodLogsCache((current) =>
+      current.map((entry) =>
+        entry.id === log.id ? { ...entry, quantity: qty, unit } : entry,
+      ),
+    );
+    setLogBusy(log.id, true);
+    setMessage('');
+    try {
+      await api.updateFoodLog(log.id, { quantity: qty, unit });
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['food-logs', date] }),
         queryClient.invalidateQueries({ queryKey: ['meal-plans-effective', date] }),
         queryClient.invalidateQueries({ queryKey: ['meal-plans', date] }),
       ]);
-    });
+    } catch (error) {
+      if (previous) queryClient.setQueryData(['food-logs', date], previous);
+      setDraftQuantities((prev) => ({ ...prev, [log.id]: String(log.quantity) }));
+      setDraftUnits((prev) => ({ ...prev, [log.id]: log.unit }));
+      showErrorFromUnknown(error);
+    } finally {
+      setLogBusy(log.id, false);
+    }
   };
 
   const confirmLog = async (id: string, { toast = true }: { toast?: boolean } = {}) => {
     const log = logs.find((entry) => entry.id === id);
-    const raw = draftQuantities[id];
-    const qty = Number(raw);
-    if (log && Number.isFinite(qty) && qty > 0 && qty !== log.quantity) {
-      try {
-        await api.updateFoodLog(id, { quantity: qty });
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['meal-plans-effective', date] }),
-          queryClient.invalidateQueries({ queryKey: ['meal-plans', date] }),
-        ]);
-      } catch (error) {
-        showErrorFromUnknown(error);
-        throw error;
+    if (log) {
+      const raw = draftQuantities[id];
+      const qty = Number(raw);
+      const unit = draftUnits[id] ?? log.unit;
+      if (
+        Number.isFinite(qty) &&
+        qty > 0 &&
+        (qty !== log.quantity || unit !== log.unit)
+      ) {
+        try {
+          await api.updateFoodLog(id, { quantity: qty, unit });
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['meal-plans-effective', date] }),
+            queryClient.invalidateQueries({ queryKey: ['meal-plans', date] }),
+          ]);
+        } catch (error) {
+          showErrorFromUnknown(error);
+          throw error;
+        }
       }
     }
 
@@ -244,7 +264,7 @@ export function DailyFoodLog({
     }
   };
 
-  const confirmMeal = async (mealLogs: FoodLogEntry[]) => {
+  const confirmMeal = async (mealId: string, mealLogs: FoodLogEntry[]) => {
     const pending = mealLogs.filter((log) => log.status === 'pending');
     if (pending.length === 0) return;
 
@@ -254,6 +274,8 @@ export function DailyFoodLog({
       for (const log of pending) {
         await confirmLog(log.id, { toast: false });
       }
+
+      setCollapsedMeals((prev) => ({ ...prev, [mealId]: true }));
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['meal-plans-effective', date] }),
@@ -496,6 +518,8 @@ export function DailyFoodLog({
       <div className="space-y-4">
         {grouped.map((meal) => {
           const mealPendingCount = meal.logs.filter((log) => log.status === 'pending').length;
+          const mealFullyConfirmed =
+            meal.logs.length > 0 && mealPendingCount === 0;
           const mealNutrients = sumNutrients(
             meal.logs.map((log) => {
               const food = foodsMap.get(log.foodId);
@@ -503,14 +527,20 @@ export function DailyFoodLog({
                 food,
                 draftQuantities[log.id],
                 log.quantity,
-                log.unit,
+                draftUnits[log.id] ?? log.unit,
               );
             }),
           );
           const isCollapsed = isMealCollapsed(meal.id);
 
           return (
-            <Card key={meal.id}>
+            <Card
+              key={meal.id}
+              className={cn(
+                mealFullyConfirmed &&
+                  'bg-green-500/5 shadow-[0_0_28px_rgba(34,197,94,0.35)] ring-1 ring-green-500/40',
+              )}
+            >
               <CardHeader className="space-y-2 pb-2">
                 <div className="flex items-start gap-2">
                   <button
@@ -528,6 +558,11 @@ export function DailyFoodLog({
                           )}
                         />
                         <CardTitle className="text-base">{meal.name}</CardTitle>
+                        {mealFullyConfirmed && (
+                          <Badge className="bg-green-600 text-white hover:bg-green-600">
+                            Confirmed
+                          </Badge>
+                        )}
                       </div>
                       {meal.logs.length > 0 && (
                         <NutrientsSummary nutrients={mealNutrients} className="mt-1 pl-6" />
@@ -554,7 +589,7 @@ export function DailyFoodLog({
                   <Button
                     className="w-full"
                     size="sm"
-                    onClick={() => void confirmMeal(meal.logs)}
+                    onClick={() => void confirmMeal(meal.id, meal.logs)}
                     disabled={saving}
                   >
                     Confirm meal ({mealPendingCount})
@@ -573,11 +608,13 @@ export function DailyFoodLog({
                         const food = foodsMap.get(log.foodId);
                         const isPending = log.status === 'pending';
                         const isBusy = !!busyLogIds[log.id];
+                        const unitOptions = foodUnitOptions(food);
+                        const currentUnit = draftUnits[log.id] ?? log.unit;
                         const itemNutrients = nutrientsForQuantity(
                           food,
                           draftQuantities[log.id],
                           log.quantity,
-                          log.unit,
+                          currentUnit,
                         );
                         return (
                           <li
@@ -602,6 +639,7 @@ export function DailyFoodLog({
                                   <Input
                                     className={cn(inputFieldClass, 'w-24')}
                                     inputMode="decimal"
+                                    aria-label="Amount"
                                     value={draftQuantities[log.id] ?? String(log.quantity)}
                                     onChange={(e) =>
                                       setDraftQuantities((prev) => ({
@@ -609,10 +647,50 @@ export function DailyFoodLog({
                                         [log.id]: e.target.value,
                                       }))
                                     }
-                                    onBlur={() => void updateQuantity(log)}
+                                    onBlur={() => void persistLogAmount(log)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.currentTarget.blur();
+                                      }
+                                    }}
                                     disabled={isBusy}
                                   />
-                                  <span className="text-sm text-muted-foreground">{log.unit}</span>
+                                  <select
+                                    className={cn(selectClass, 'mb-0 h-9 w-auto min-w-[5.5rem]')}
+                                    aria-label="Unit"
+                                    value={currentUnit}
+                                    disabled={isBusy}
+                                    onChange={(e) => {
+                                      const nextUnit = e.target.value;
+                                      setDraftUnits((prev) => ({
+                                        ...prev,
+                                        [log.id]: nextUnit,
+                                      }));
+                                      const qty = Number(
+                                        draftQuantities[log.id] ?? log.quantity,
+                                      );
+                                      void persistLogAmount(log, {
+                                        quantity: Number.isFinite(qty) ? qty : log.quantity,
+                                        unit: nextUnit,
+                                      });
+                                    }}
+                                  >
+                                    {(unitOptions.some((option) => option.value === currentUnit)
+                                      ? unitOptions
+                                      : [
+                                          {
+                                            value: currentUnit,
+                                            label: currentUnit,
+                                            gramsPerUnit: 1,
+                                          },
+                                          ...unitOptions,
+                                        ]
+                                    ).map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
                                 </div>
                               </div>
                               <div className="flex shrink-0 items-center gap-1">

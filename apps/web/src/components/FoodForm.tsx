@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  caloriesFromMacros,
   formatNutrientsSummary,
   macroCaloriesError,
   roundMacroValue,
@@ -34,12 +35,16 @@ type DraftServing = {
   grams: string;
 };
 
+/** Scale nutrients and keep calories consistent with 4/4/9 after rounding macros. */
 function scaleNutrients(nutrients: Nutrients, factor: number): Nutrients {
+  const protein = Number((nutrients.protein * factor).toFixed(2));
+  const fat = Number((nutrients.fat * factor).toFixed(2));
+  const carbs = Number((nutrients.carbs * factor).toFixed(2));
   return {
-    calories: roundMacroValue(nutrients.calories * factor),
-    protein: Number((nutrients.protein * factor).toFixed(2)),
-    fat: Number((nutrients.fat * factor).toFixed(2)),
-    carbs: Number((nutrients.carbs * factor).toFixed(2)),
+    calories: caloriesFromMacros(protein, fat, carbs),
+    protein,
+    fat,
+    carbs,
   };
 }
 
@@ -60,12 +65,17 @@ function parseServingDrafts(servings: ServingSize[]): DraftServing[] {
   }));
 }
 
+function emptyServingDraft(): DraftServing {
+  return { key: crypto.randomUUID(), label: '', grams: '' };
+}
+
 export function FoodForm({ initial, submitLabel, onSubmit }: FoodFormProps) {
   const [name, setName] = useState(initial?.name ?? '');
   const [brand, setBrand] = useState(initial?.brand ?? '');
-  const [servings, setServings] = useState<DraftServing[]>(() =>
-    parseServingDrafts(initial?.servingSizes ?? []),
-  );
+  const [servings, setServings] = useState<DraftServing[]>(() => {
+    const existing = parseServingDrafts(initial?.servingSizes ?? []);
+    return existing.length > 0 ? existing : [emptyServingDraft()];
+  });
   const [basisKey, setBasisKey] = useState(PER_100G);
   const [calories, setCalories] = useState(() =>
     initial?.nutrientsPer100g ? String(roundMacroValue(initial.nutrientsPer100g.calories)) : '',
@@ -130,10 +140,7 @@ export function FoodForm({ initial, submitLabel, onSubmit }: FoodFormProps) {
   };
 
   const addServing = () => {
-    setServings((prev) => [
-      ...prev,
-      { key: crypto.randomUUID(), label: '', grams: '' },
-    ]);
+    setServings((prev) => [...prev, emptyServingDraft()]);
   };
 
   const updateServing = (key: string, patch: Partial<DraftServing>) => {
@@ -143,7 +150,10 @@ export function FoodForm({ initial, submitLabel, onSubmit }: FoodFormProps) {
   };
 
   const removeServing = (key: string) => {
-    setServings((prev) => prev.filter((serving) => serving.key !== key));
+    setServings((prev) => {
+      const next = prev.filter((serving) => serving.key !== key);
+      return next.length > 0 ? next : [emptyServingDraft()];
+    });
     if (basisKey === key) {
       const per100g = nutrientsPer100gFromForm();
       const strings = nutrientsToStrings(per100g);
@@ -172,18 +182,25 @@ export function FoodForm({ initial, submitLabel, onSubmit }: FoodFormProps) {
       }
     }
 
-    const nutrientsPer100g = nutrientsPer100gFromForm();
+    const enteredCalories = Number(calories) || 0;
+    const enteredProtein = Number(protein) || 0;
+    const enteredFat = Number(fat) || 0;
+    const enteredCarbs = Number(carbs) || 0;
+    // Validate the values the user typed (serving or 100g basis), not the
+    // rounded per-100g conversion — scaling can nudge macros by a calorie.
     const validationError = macroCaloriesError(
-      nutrientsPer100g.calories,
-      nutrientsPer100g.protein,
-      nutrientsPer100g.fat,
-      nutrientsPer100g.carbs,
+      enteredCalories,
+      enteredProtein,
+      enteredFat,
+      enteredCarbs,
     );
     if (validationError) {
       setMessage(validationError);
       setMessageIsError(true);
       return;
     }
+
+    const nutrientsPer100g = nutrientsPer100gFromForm();
 
     setSaving(true);
     setMessage('');
@@ -224,48 +241,53 @@ export function FoodForm({ initial, submitLabel, onSubmit }: FoodFormProps) {
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <Label className="text-sm font-medium">Units of measurement</Label>
+          <Label className="text-sm font-medium">Units & amount</Label>
           <Button type="button" variant="outline" size="sm" onClick={addServing}>
             Add unit
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Define custom units (e.g. scoop, cup) and how many grams each is. Nutrition is always
-          stored per 100g and converted from the unit you enter below.
+          Optional custom units for logging (e.g. scoop, cup). Set how many grams one unit weighs.
+          You can enter nutrition per 100g or per a unit below.
         </p>
-        {servings.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No custom units yet — default is 100g.</p>
-        ) : (
-          <ul className="space-y-2">
-            {servings.map((serving) => (
-              <li key={serving.key} className="flex items-center gap-2">
-                <Input
-                  className={cn(inputFieldClass, 'flex-1')}
-                  placeholder="Unit label"
-                  value={serving.label}
-                  onChange={(e) => updateServing(serving.key, { label: e.target.value })}
-                />
-                <Input
-                  className={cn(inputFieldClass, 'w-24')}
-                  placeholder="g"
-                  inputMode="decimal"
-                  value={serving.grams}
-                  onChange={(e) => updateServing(serving.key, { grams: e.target.value })}
-                />
-                <span className="shrink-0 text-xs text-muted-foreground">g</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive"
-                  onClick={() => removeServing(serving.key)}
-                >
-                  Remove
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="grid grid-cols-[1fr_7rem_auto_auto] items-center gap-2 px-0.5 text-xs text-muted-foreground">
+          <span>Unit</span>
+          <span>g per unit</span>
+          <span className="w-3" />
+          <span className="w-16" />
+        </div>
+        <ul className="space-y-2">
+          {servings.map((serving) => (
+            <li key={serving.key} className="grid grid-cols-[1fr_7rem_auto_auto] items-center gap-2">
+              <Input
+                className={cn(inputFieldClass)}
+                placeholder="e.g. scoop"
+                aria-label="Unit name"
+                value={serving.label}
+                onChange={(e) => updateServing(serving.key, { label: e.target.value })}
+              />
+              <Input
+                className={cn(inputFieldClass)}
+                placeholder="30"
+                inputMode="decimal"
+                aria-label="Grams per unit"
+                value={serving.grams}
+                onChange={(e) => updateServing(serving.key, { grams: e.target.value })}
+              />
+              <span className="shrink-0 text-xs text-muted-foreground">g</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive"
+                onClick={() => removeServing(serving.key)}
+                disabled={servings.length === 1 && !serving.label && !serving.grams}
+              >
+                Remove
+              </Button>
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div className="space-y-3">
