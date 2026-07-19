@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronDown, Loader2, Minus, X } from 'lucide-react';
 import {
   DEFAULT_MEAL_COUNT,
@@ -41,6 +42,11 @@ import { FoodPicker } from './FoodPicker';
 import { FoodQuantityFields } from './FoodQuantityFields';
 import { api, localStore } from '../lib/client';
 import { foodUnitOptions, GRAMS_UNIT } from '@/lib/food-units';
+
+/** Stable across weekly → day-override remaps (meal UUID changes). */
+function mealCollapseKey(meal: Pick<EffectiveMealBlock, 'mealIndex'>) {
+  return `idx-${meal.mealIndex}`;
+}
 
 type DailyFoodLogProps = {
   date: string;
@@ -241,7 +247,10 @@ export function DailyFoodLog({
     }
   };
 
-  const removeLog = async (id: string) => {
+  const removeLog = async (id: string, meal: Pick<EffectiveMealBlock, 'mealIndex'>) => {
+    // Keep this meal expanded — remove may fork weekly → day meals and change IDs.
+    setCollapsedMeals((prev) => ({ ...prev, [mealCollapseKey(meal)]: false }));
+
     const previous = patchFoodLogsCache((current) =>
       current.map((log) =>
         log.id === id ? { ...log, deletedAt: new Date().toISOString() } : log,
@@ -251,6 +260,8 @@ export function DailyFoodLog({
     try {
       await api.deleteFoodLog(id);
       showSuccess('Removed');
+      // Allow exit animation to finish before refetch settles the list.
+      await new Promise((resolve) => window.setTimeout(resolve, 220));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['food-logs', date] }),
         queryClient.invalidateQueries({ queryKey: ['meal-plans-effective', date] }),
@@ -264,7 +275,7 @@ export function DailyFoodLog({
     }
   };
 
-  const confirmMeal = async (mealId: string, mealLogs: FoodLogEntry[]) => {
+  const confirmMeal = async (meal: Pick<EffectiveMealBlock, 'mealIndex'>, mealLogs: FoodLogEntry[]) => {
     const pending = mealLogs.filter((log) => log.status === 'pending');
     if (pending.length === 0) return;
 
@@ -275,7 +286,7 @@ export function DailyFoodLog({
         await confirmLog(log.id, { toast: false });
       }
 
-      setCollapsedMeals((prev) => ({ ...prev, [mealId]: true }));
+      setCollapsedMeals((prev) => ({ ...prev, [mealCollapseKey(meal)]: true }));
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['meal-plans-effective', date] }),
@@ -321,12 +332,14 @@ export function DailyFoodLog({
     setDialogError('');
   };
 
-  const isMealCollapsed = (mealId: string) => collapsedMeals[mealId] ?? true;
+  const isMealCollapsed = (meal: Pick<EffectiveMealBlock, 'mealIndex'>) =>
+    collapsedMeals[mealCollapseKey(meal)] ?? true;
 
-  const toggleMealCollapsed = (mealId: string) => {
+  const toggleMealCollapsed = (meal: Pick<EffectiveMealBlock, 'mealIndex'>) => {
+    const key = mealCollapseKey(meal);
     setCollapsedMeals((prev) => ({
       ...prev,
-      [mealId]: !(prev[mealId] ?? true),
+      [key]: !(prev[key] ?? true),
     }));
   };
 
@@ -467,7 +480,7 @@ export function DailyFoodLog({
         if (existing.some((log) => log.id === created.id)) return existing;
         return [...existing, created];
       });
-      setCollapsedMeals((prev) => ({ ...prev, [meal.id]: false }));
+      setCollapsedMeals((prev) => ({ ...prev, [mealCollapseKey(meal)]: false }));
 
       await queryClient.refetchQueries({ queryKey: ['food-logs', date] });
       showSuccess('Food logged');
@@ -531,11 +544,11 @@ export function DailyFoodLog({
               );
             }),
           );
-          const isCollapsed = isMealCollapsed(meal.id);
+          const isCollapsed = isMealCollapsed(meal);
 
           return (
             <Card
-              key={meal.id}
+              key={mealCollapseKey(meal)}
               className={cn(
                 mealFullyConfirmed &&
                   'bg-green-500/5 shadow-[0_0_28px_rgba(34,197,94,0.35)] ring-1 ring-green-500/40',
@@ -546,7 +559,7 @@ export function DailyFoodLog({
                   <button
                     type="button"
                     className="flex min-w-0 flex-1 flex-row items-start justify-between gap-2 text-left"
-                    onClick={() => toggleMealCollapsed(meal.id)}
+                    onClick={() => toggleMealCollapsed(meal)}
                     aria-expanded={!isCollapsed}
                   >
                     <div className="min-w-0 flex-1">
@@ -589,7 +602,7 @@ export function DailyFoodLog({
                   <Button
                     className="w-full"
                     size="sm"
-                    onClick={() => void confirmMeal(meal.id, meal.logs)}
+                    onClick={() => void confirmMeal(meal, meal.logs)}
                     disabled={saving}
                   >
                     Confirm meal ({mealPendingCount})
@@ -604,6 +617,7 @@ export function DailyFoodLog({
                     </p>
                   ) : (
                     <ul className="space-y-2">
+                      <AnimatePresence initial={false} mode="popLayout">
                       {meal.logs.map((log, index) => {
                         const food = foodsMap.get(log.foodId);
                         const isPending = log.status === 'pending';
@@ -617,10 +631,19 @@ export function DailyFoodLog({
                           currentUnit,
                         );
                         return (
-                          <li
+                          <motion.li
                             key={log.id}
+                            layout
+                            initial={{ opacity: 0, y: -6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                            transition={{
+                              layout: { type: 'spring', stiffness: 420, damping: 36 },
+                              opacity: { duration: 0.18 },
+                              y: { duration: 0.18 },
+                            }}
                             className={cn(
-                              'rounded-lg border border-border px-3 py-2',
+                              'overflow-hidden rounded-lg border border-border px-3 py-2',
                               index % 2 === 0 ? 'bg-background' : 'bg-accent',
                               isPending && 'border-l-2 border-l-primary',
                             )}
@@ -727,7 +750,7 @@ export function DailyFoodLog({
                                       size="icon-sm"
                                       className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                                       aria-label="Remove food"
-                                      onClick={() => void removeLog(log.id)}
+                                      onClick={() => void removeLog(log.id, meal)}
                                     >
                                       <Minus className="size-4" />
                                     </Button>
@@ -735,9 +758,10 @@ export function DailyFoodLog({
                                 )}
                               </div>
                             </div>
-                          </li>
+                          </motion.li>
                         );
                       })}
+                      </AnimatePresence>
                     </ul>
                   )}
                   {showAddFood && (
