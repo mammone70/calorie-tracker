@@ -2,23 +2,26 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, ChevronDown, Loader2, Minus, X } from 'lucide-react';
+import { Check, Copy, Loader2, Minus, X } from 'lucide-react';
 import {
   DEFAULT_MEAL_COUNT,
   MAX_MEALS_PER_DAY,
   MIN_MEALS_PER_DAY,
   dayOfWeekFromDate,
   defaultMealName,
+  formatCalendarDate,
   formatMealTime,
   getClientTimeZone,
   groupFoodLogsByMeal,
   loggedAtForDate,
   mealRefFromEffectiveMeal,
+  parseCalendarDate,
   type DayMeal,
   type EffectiveMealBlock,
   type EffectiveMealPlan,
   type Food,
   type FoodLogEntry,
+  type GroupedFoodLogMeal,
   type WeekdayIndex,
 } from '@calorie-tracker/shared';
 import { Badge } from '@/components/ui/badge';
@@ -44,8 +47,14 @@ import { api, localStore } from '../lib/client';
 import { foodUnitOptions, GRAMS_UNIT } from '@/lib/food-units';
 
 /** Stable across weekly → day-override remaps (meal UUID changes). */
-function mealCollapseKey(meal: Pick<EffectiveMealBlock, 'mealIndex'>) {
+function mealKey(meal: Pick<EffectiveMealBlock, 'mealIndex'>) {
   return `idx-${meal.mealIndex}`;
+}
+
+function previousCalendarDate(date: string): string {
+  const d = parseCalendarDate(date);
+  d.setDate(d.getDate() - 1);
+  return formatCalendarDate(d);
 }
 
 type DailyFoodLogProps = {
@@ -83,18 +92,41 @@ export function DailyFoodLog({
   const [message, setMessage] = useState('');
   const [messageIsError, setMessageIsError] = useState(false);
   const [busyLogIds, setBusyLogIds] = useState<Record<string, boolean>>({});
-  const [collapsedMeals, setCollapsedMeals] = useState<Record<string, boolean>>({});
+  const [selectedMealKey, setSelectedMealKey] = useState<string | null>(null);
+  const [copyTargetKey, setCopyTargetKey] = useState<string | null>(null);
   const [addMealOpen, setAddMealOpen] = useState(false);
   const [newMealName, setNewMealName] = useState('');
   const [addMealError, setAddMealError] = useState('');
+
+  const previousDate = previousCalendarDate(date);
 
   const foodsQuery = useQuery({
     queryKey: ['foods'],
     queryFn: () => api.getFoods() as Promise<Food[]>,
   });
 
+  const previousDayQuery = useQuery({
+    queryKey: ['copy-meal-source', previousDate],
+    queryFn: async () => {
+      const [plan, dayLogs] = await Promise.all([
+        api.getEffectiveMealPlans(previousDate) as Promise<EffectiveMealPlan>,
+        api.getFoodLogs(previousDate) as Promise<FoodLogEntry[]>,
+      ]);
+      return groupFoodLogsByMeal(plan.meals, dayLogs);
+    },
+    enabled: !!copyTargetKey,
+  });
+
   const grouped = groupFoodLogsByMeal(meals, logs);
   const pendingCount = logs.filter((log) => !log.deletedAt && log.status === 'pending').length;
+  const selectedMeal =
+    selectedMealKey != null
+      ? (grouped.find((meal) => mealKey(meal) === selectedMealKey) ?? null)
+      : null;
+  const copyTargetMeal =
+    copyTargetKey != null
+      ? (grouped.find((meal) => mealKey(meal) === copyTargetKey) ?? null)
+      : null;
 
   useEffect(() => {
     if (preselectedFoodId) {
@@ -248,8 +280,8 @@ export function DailyFoodLog({
   };
 
   const removeLog = async (id: string, meal: Pick<EffectiveMealBlock, 'mealIndex'>) => {
-    // Keep this meal expanded — remove may fork weekly → day meals and change IDs.
-    setCollapsedMeals((prev) => ({ ...prev, [mealCollapseKey(meal)]: false }));
+    // Keep this meal modal open — remove may fork weekly → day meals and change IDs.
+    setSelectedMealKey(mealKey(meal));
 
     const previous = patchFoodLogsCache((current) =>
       current.map((log) =>
@@ -275,7 +307,7 @@ export function DailyFoodLog({
     }
   };
 
-  const confirmMeal = async (meal: Pick<EffectiveMealBlock, 'mealIndex'>, mealLogs: FoodLogEntry[]) => {
+  const confirmMeal = async (mealLogs: FoodLogEntry[]) => {
     const pending = mealLogs.filter((log) => log.status === 'pending');
     if (pending.length === 0) return;
 
@@ -285,8 +317,6 @@ export function DailyFoodLog({
       for (const log of pending) {
         await confirmLog(log.id, { toast: false });
       }
-
-      setCollapsedMeals((prev) => ({ ...prev, [mealCollapseKey(meal)]: true }));
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['meal-plans-effective', date] }),
@@ -332,15 +362,20 @@ export function DailyFoodLog({
     setDialogError('');
   };
 
-  const isMealCollapsed = (meal: Pick<EffectiveMealBlock, 'mealIndex'>) =>
-    collapsedMeals[mealCollapseKey(meal)] ?? true;
+  const openMealDetail = (meal: Pick<EffectiveMealBlock, 'mealIndex'>) => {
+    setSelectedMealKey(mealKey(meal));
+  };
 
-  const toggleMealCollapsed = (meal: Pick<EffectiveMealBlock, 'mealIndex'>) => {
-    const key = mealCollapseKey(meal);
-    setCollapsedMeals((prev) => ({
-      ...prev,
-      [key]: !(prev[key] ?? true),
-    }));
+  const closeMealDetail = () => {
+    setSelectedMealKey(null);
+  };
+
+  const openCopyMealDialog = (meal: Pick<EffectiveMealBlock, 'mealIndex'>) => {
+    setCopyTargetKey(mealKey(meal));
+  };
+
+  const closeCopyMealDialog = () => {
+    setCopyTargetKey(null);
   };
 
   const invalidateDayQueries = async () => {
@@ -433,8 +468,45 @@ export function DailyFoodLog({
 
       await api.deleteDayMeal(target.id);
       await api.materializeFoodLogsFromPlan(date);
+      if (selectedMealKey === mealKey(meal)) closeMealDetail();
       await invalidateDayQueries();
       showSuccess('Meal removed');
+    } catch (error) {
+      showErrorFromUnknown(error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copyMealFrom = async (sourceDate: string, sourceMeal: GroupedFoodLogMeal) => {
+    if (!copyTargetMeal) return;
+    const sourceLogs = sourceMeal.logs.filter((log) => !log.deletedAt);
+    if (sourceLogs.length === 0) {
+      showErrorFromUnknown(new Error('That meal has no foods to copy'));
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const target = await resolveMealForLogging(copyTargetMeal);
+      for (const log of sourceLogs) {
+        await api.createFoodLog({
+          loggedAt: loggedAtForDate(date, target.mealTime, getClientTimeZone()),
+          ...mealRefFromEffectiveMeal(target),
+          foodId: log.foodId,
+          quantity: log.quantity,
+          unit: log.unit,
+          status: 'pending' as const,
+        });
+      }
+      await invalidateDayQueries();
+      closeCopyMealDialog();
+      setSelectedMealKey(mealKey(target));
+      showSuccess(
+        `Copied ${sourceLogs.length} food${sourceLogs.length === 1 ? '' : 's'} from ${sourceMeal.name}${
+          sourceDate !== date ? ` (${sourceDate})` : ''
+        }`,
+      );
     } catch (error) {
       showErrorFromUnknown(error);
     } finally {
@@ -480,7 +552,7 @@ export function DailyFoodLog({
         if (existing.some((log) => log.id === created.id)) return existing;
         return [...existing, created];
       });
-      setCollapsedMeals((prev) => ({ ...prev, [mealCollapseKey(meal)]: false }));
+      setSelectedMealKey(mealKey(meal));
 
       await queryClient.refetchQueries({ queryKey: ['food-logs', date] });
       showSuccess('Food logged');
@@ -493,6 +565,162 @@ export function DailyFoodLog({
     } finally {
       setSaving(false);
     }
+  };
+
+  const renderMealFoodList = (meal: GroupedFoodLogMeal) => {
+    if (meal.logs.length === 0) {
+      return (
+        <p className="text-sm italic text-muted-foreground">Nothing planned for this meal</p>
+      );
+    }
+
+    return (
+      <ul className="space-y-2">
+        <AnimatePresence initial={false} mode="popLayout">
+          {meal.logs.map((log, index) => {
+            const food = foodsMap.get(log.foodId);
+            const isPending = log.status === 'pending';
+            const isBusy = !!busyLogIds[log.id];
+            const unitOptions = foodUnitOptions(food);
+            const currentUnit = draftUnits[log.id] ?? log.unit;
+            const itemNutrients = nutrientsForQuantity(
+              food,
+              draftQuantities[log.id],
+              log.quantity,
+              currentUnit,
+            );
+            return (
+              <motion.li
+                key={log.id}
+                layout
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                transition={{
+                  layout: { type: 'spring', stiffness: 420, damping: 36 },
+                  opacity: { duration: 0.18 },
+                  y: { duration: 0.18 },
+                }}
+                className={cn(
+                  'overflow-hidden rounded-lg border border-border px-3 py-2',
+                  index % 2 === 0 ? 'bg-background' : 'bg-accent',
+                  isPending && 'border-l-2 border-l-primary',
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{food?.name ?? 'Unknown food'}</p>
+                      {isPending && <Badge variant="secondary">Planned</Badge>}
+                    </div>
+                    <NutrientsSummary nutrients={itemNutrients} className="mt-0.5" />
+                    {isPending && (
+                      <p className="text-xs text-primary">Confirm when eaten</p>
+                    )}
+                    <div className="mt-2 flex items-center gap-2">
+                      <Input
+                        className={cn(inputFieldClass, 'w-24')}
+                        inputMode="decimal"
+                        aria-label="Amount"
+                        value={draftQuantities[log.id] ?? String(log.quantity)}
+                        onChange={(e) =>
+                          setDraftQuantities((prev) => ({
+                            ...prev,
+                            [log.id]: e.target.value,
+                          }))
+                        }
+                        onBlur={() => void persistLogAmount(log)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.currentTarget.blur();
+                          }
+                        }}
+                        disabled={isBusy}
+                      />
+                      <select
+                        className={cn(selectClass, 'mb-0 h-9 w-auto min-w-[5.5rem]')}
+                        aria-label="Unit"
+                        value={currentUnit}
+                        disabled={isBusy}
+                        onChange={(e) => {
+                          const nextUnit = e.target.value;
+                          setDraftUnits((prev) => ({
+                            ...prev,
+                            [log.id]: nextUnit,
+                          }));
+                          const qty = Number(draftQuantities[log.id] ?? log.quantity);
+                          void persistLogAmount(log, {
+                            quantity: Number.isFinite(qty) ? qty : log.quantity,
+                            unit: nextUnit,
+                          });
+                        }}
+                      >
+                        {(unitOptions.some((option) => option.value === currentUnit)
+                          ? unitOptions
+                          : [
+                              {
+                                value: currentUnit,
+                                label: currentUnit,
+                                gramsPerUnit: 1,
+                              },
+                              ...unitOptions,
+                            ]
+                        ).map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {isBusy ? (
+                      <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      <>
+                        {isPending ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-green-600 hover:bg-green-600/10 hover:text-green-600"
+                            aria-label="Confirm food"
+                            onClick={() => void confirmLog(log.id)}
+                          >
+                            <Check className="size-4" />
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-muted-foreground hover:bg-muted"
+                            aria-label="Unconfirm food"
+                            onClick={() => void unconfirmLog(log.id)}
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          aria-label="Remove food"
+                          onClick={() => void removeLog(log.id, meal)}
+                        >
+                          <Minus className="size-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </motion.li>
+            );
+          })}
+        </AnimatePresence>
+      </ul>
+    );
   };
 
   if (meals.length === 0) {
@@ -531,8 +759,7 @@ export function DailyFoodLog({
       <div className="space-y-4">
         {grouped.map((meal) => {
           const mealPendingCount = meal.logs.filter((log) => log.status === 'pending').length;
-          const mealFullyConfirmed =
-            meal.logs.length > 0 && mealPendingCount === 0;
+          const mealFullyConfirmed = meal.logs.length > 0 && mealPendingCount === 0;
           const mealNutrients = sumNutrients(
             meal.logs.map((log) => {
               const food = foodsMap.get(log.foodId);
@@ -544,41 +771,38 @@ export function DailyFoodLog({
               );
             }),
           );
-          const isCollapsed = isMealCollapsed(meal);
 
           return (
             <Card
-              key={mealCollapseKey(meal)}
+              key={mealKey(meal)}
               className={cn(
                 mealFullyConfirmed &&
-                  'bg-green-500/5 shadow-[0_0_28px_rgba(34,197,94,0.35)] ring-1 ring-green-500/40',
+                  'bg-primary/5 shadow-[0_0_28px_color-mix(in_oklab,var(--primary)_35%,transparent)] ring-1 ring-primary/40',
               )}
             >
-              <CardHeader className="space-y-2 pb-2">
+              <CardHeader className="space-y-2 pb-3">
                 <div className="flex items-start gap-2">
                   <button
                     type="button"
                     className="flex min-w-0 flex-1 flex-row items-start justify-between gap-2 text-left"
-                    onClick={() => toggleMealCollapsed(meal)}
-                    aria-expanded={!isCollapsed}
+                    onClick={() => openMealDetail(meal)}
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <ChevronDown
-                          className={cn(
-                            'size-4 shrink-0 text-muted-foreground transition-transform',
-                            isCollapsed && '-rotate-90',
-                          )}
-                        />
+                      <div className="flex flex-wrap items-center gap-2">
                         <CardTitle className="text-base">{meal.name}</CardTitle>
                         {mealFullyConfirmed && (
-                          <Badge className="bg-green-600 text-white hover:bg-green-600">
+                          <Badge className="bg-primary text-primary-foreground hover:bg-primary">
                             Confirmed
                           </Badge>
                         )}
+                        {mealPendingCount > 0 && (
+                          <Badge variant="secondary">{mealPendingCount} planned</Badge>
+                        )}
                       </div>
-                      {meal.logs.length > 0 && (
-                        <NutrientsSummary nutrients={mealNutrients} className="mt-1 pl-6" />
+                      {meal.logs.length > 0 ? (
+                        <NutrientsSummary nutrients={mealNutrients} className="mt-1" />
+                      ) : (
+                        <p className="mt-1 text-sm italic text-muted-foreground">No foods yet</p>
                       )}
                     </div>
                     {formatMealTime(meal.mealTime) && (
@@ -587,194 +811,30 @@ export function DailyFoodLog({
                       </span>
                     )}
                   </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={saving}
+                    onClick={() => openCopyMealDialog(meal)}
+                  >
+                    <Copy className="size-3.5" />
+                    Copy meal
+                  </Button>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                     disabled={saving || meals.length <= MIN_MEALS_PER_DAY}
                     onClick={() => void removeMeal(meal)}
                   >
                     Remove meal
                   </Button>
                 </div>
-                {!isCollapsed && mealPendingCount > 0 && (
-                  <Button
-                    className="w-full"
-                    size="sm"
-                    onClick={() => void confirmMeal(meal, meal.logs)}
-                    disabled={saving}
-                  >
-                    Confirm meal ({mealPendingCount})
-                  </Button>
-                )}
               </CardHeader>
-              {!isCollapsed && (
-                <CardContent className="space-y-2">
-                  {meal.logs.length === 0 ? (
-                    <p className="text-sm italic text-muted-foreground">
-                      Nothing planned for this meal
-                    </p>
-                  ) : (
-                    <ul className="space-y-2">
-                      <AnimatePresence initial={false} mode="popLayout">
-                      {meal.logs.map((log, index) => {
-                        const food = foodsMap.get(log.foodId);
-                        const isPending = log.status === 'pending';
-                        const isBusy = !!busyLogIds[log.id];
-                        const unitOptions = foodUnitOptions(food);
-                        const currentUnit = draftUnits[log.id] ?? log.unit;
-                        const itemNutrients = nutrientsForQuantity(
-                          food,
-                          draftQuantities[log.id],
-                          log.quantity,
-                          currentUnit,
-                        );
-                        return (
-                          <motion.li
-                            key={log.id}
-                            layout
-                            initial={{ opacity: 0, y: -6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                            transition={{
-                              layout: { type: 'spring', stiffness: 420, damping: 36 },
-                              opacity: { duration: 0.18 },
-                              y: { duration: 0.18 },
-                            }}
-                            className={cn(
-                              'overflow-hidden rounded-lg border border-border px-3 py-2',
-                              index % 2 === 0 ? 'bg-background' : 'bg-accent',
-                              isPending && 'border-l-2 border-l-primary',
-                            )}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <p className="font-medium">{food?.name ?? 'Unknown food'}</p>
-                                  {isPending && <Badge variant="secondary">Planned</Badge>}
-                                </div>
-                                <NutrientsSummary nutrients={itemNutrients} className="mt-0.5" />
-                                {isPending && (
-                                  <p className="text-xs text-primary">Confirm when eaten</p>
-                                )}
-                                <div className="mt-2 flex items-center gap-2">
-                                  <Input
-                                    className={cn(inputFieldClass, 'w-24')}
-                                    inputMode="decimal"
-                                    aria-label="Amount"
-                                    value={draftQuantities[log.id] ?? String(log.quantity)}
-                                    onChange={(e) =>
-                                      setDraftQuantities((prev) => ({
-                                        ...prev,
-                                        [log.id]: e.target.value,
-                                      }))
-                                    }
-                                    onBlur={() => void persistLogAmount(log)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.currentTarget.blur();
-                                      }
-                                    }}
-                                    disabled={isBusy}
-                                  />
-                                  <select
-                                    className={cn(selectClass, 'mb-0 h-9 w-auto min-w-[5.5rem]')}
-                                    aria-label="Unit"
-                                    value={currentUnit}
-                                    disabled={isBusy}
-                                    onChange={(e) => {
-                                      const nextUnit = e.target.value;
-                                      setDraftUnits((prev) => ({
-                                        ...prev,
-                                        [log.id]: nextUnit,
-                                      }));
-                                      const qty = Number(
-                                        draftQuantities[log.id] ?? log.quantity,
-                                      );
-                                      void persistLogAmount(log, {
-                                        quantity: Number.isFinite(qty) ? qty : log.quantity,
-                                        unit: nextUnit,
-                                      });
-                                    }}
-                                  >
-                                    {(unitOptions.some((option) => option.value === currentUnit)
-                                      ? unitOptions
-                                      : [
-                                          {
-                                            value: currentUnit,
-                                            label: currentUnit,
-                                            gramsPerUnit: 1,
-                                          },
-                                          ...unitOptions,
-                                        ]
-                                    ).map((option) => (
-                                      <option key={option.value} value={option.value}>
-                                        {option.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
-                              <div className="flex shrink-0 items-center gap-1">
-                                {isBusy ? (
-                                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                                ) : (
-                                  <>
-                                    {isPending ? (
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        className="text-green-600 hover:bg-green-600/10 hover:text-green-600"
-                                        aria-label="Confirm food"
-                                        onClick={() => void confirmLog(log.id)}
-                                      >
-                                        <Check className="size-4" />
-                                      </Button>
-                                    ) : (
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        className="text-muted-foreground hover:bg-muted"
-                                        aria-label="Unconfirm food"
-                                        onClick={() => void unconfirmLog(log.id)}
-                                      >
-                                        <X className="size-4" />
-                                      </Button>
-                                    )}
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon-sm"
-                                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                      aria-label="Remove food"
-                                      onClick={() => void removeLog(log.id, meal)}
-                                    >
-                                      <Minus className="size-4" />
-                                    </Button>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </motion.li>
-                        );
-                      })}
-                      </AnimatePresence>
-                    </ul>
-                  )}
-                  {showAddFood && (
-                    <Button
-                      variant="link"
-                      className="h-auto p-0"
-                      onClick={() => selectMealForAdd(meal)}
-                    >
-                      Add food to this meal
-                    </Button>
-                  )}
-                </CardContent>
-              )}
             </Card>
           );
         })}
@@ -791,6 +851,160 @@ export function DailyFoodLog({
           Add meal
         </Button>
       </div>
+
+      <Dialog
+        open={selectedMeal != null}
+        onOpenChange={(open) => {
+          if (!open) closeMealDetail();
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          {selectedMeal && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex flex-wrap items-center gap-2">
+                  <span>{selectedMeal.name}</span>
+                  {selectedMeal.logs.length > 0 &&
+                    selectedMeal.logs.every((log) => log.status === 'confirmed') && (
+                      <Badge className="bg-primary text-primary-foreground hover:bg-primary">
+                        Confirmed
+                      </Badge>
+                    )}
+                </DialogTitle>
+                <DialogDescription>
+                  {formatMealTime(selectedMeal.mealTime)
+                    ? `${formatMealTime(selectedMeal.mealTime)} · ${date}`
+                    : date}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3">
+                {selectedMeal.logs.filter((log) => log.status === 'pending').length > 0 && (
+                  <Button
+                    className="w-full"
+                    size="sm"
+                    onClick={() => void confirmMeal(selectedMeal.logs)}
+                    disabled={saving}
+                  >
+                    Confirm meal (
+                    {selectedMeal.logs.filter((log) => log.status === 'pending').length})
+                  </Button>
+                )}
+
+                {renderMealFoodList(selectedMeal)}
+
+                {showAddFood && (
+                  <Button
+                    variant="link"
+                    className="h-auto p-0"
+                    onClick={() => selectMealForAdd(selectedMeal)}
+                  >
+                    Add food to this meal
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={copyTargetMeal != null}
+        onOpenChange={(open) => {
+          if (!open) closeCopyMealDialog();
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          {copyTargetMeal && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Copy into {copyTargetMeal.name}</DialogTitle>
+                <DialogDescription>
+                  Choose a meal from today or yesterday. Foods are added as planned (not confirmed).
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Today</p>
+                  {grouped.filter((meal) => mealKey(meal) !== mealKey(copyTargetMeal)).length ===
+                  0 ? (
+                    <p className="text-sm text-muted-foreground">No other meals today</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {grouped
+                        .filter((meal) => mealKey(meal) !== mealKey(copyTargetMeal))
+                        .map((meal) => {
+                          const count = meal.logs.filter((log) => !log.deletedAt).length;
+                          return (
+                            <Button
+                              key={mealKey(meal)}
+                              type="button"
+                              variant="outline"
+                              className="h-auto w-full justify-between px-3 py-2"
+                              disabled={saving || count === 0}
+                              onClick={() => void copyMealFrom(date, meal)}
+                            >
+                              <span className="truncate text-left">
+                                {meal.name}
+                                {formatMealTime(meal.mealTime)
+                                  ? ` · ${formatMealTime(meal.mealTime)}`
+                                  : ''}
+                              </span>
+                              <span className="shrink-0 text-muted-foreground">
+                                {count === 0 ? 'Empty' : `${count} food${count === 1 ? '' : 's'}`}
+                              </span>
+                            </Button>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Yesterday ({previousDate})</p>
+                  {previousDayQuery.isLoading ? (
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin" />
+                      Loading…
+                    </p>
+                  ) : previousDayQuery.isError ? (
+                    <p className="text-sm text-destructive">Could not load yesterday’s meals</p>
+                  ) : (previousDayQuery.data ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No meals yesterday</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(previousDayQuery.data ?? []).map((meal) => {
+                        const count = meal.logs.filter((log) => !log.deletedAt).length;
+                        return (
+                          <Button
+                            key={`prev-${mealKey(meal)}`}
+                            type="button"
+                            variant="outline"
+                            className="h-auto w-full justify-between px-3 py-2"
+                            disabled={saving || count === 0}
+                            onClick={() => void copyMealFrom(previousDate, meal)}
+                          >
+                            <span className="truncate text-left">
+                              {meal.name}
+                              {formatMealTime(meal.mealTime)
+                                ? ` · ${formatMealTime(meal.mealTime)}`
+                                : ''}
+                            </span>
+                            <span className="shrink-0 text-muted-foreground">
+                              {count === 0 ? 'Empty' : `${count} food${count === 1 ? '' : 's'}`}
+                            </span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={addMealOpen}

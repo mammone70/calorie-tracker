@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -18,6 +19,24 @@ import { WorkoutProgramBoard } from '../components/WorkoutProgramBoard';
 import { useAuth } from '../contexts/AuthContext';
 import { useMinWidth } from '../hooks/useMinWidth';
 import { api } from '../lib/client';
+import {
+  forgetWorkoutEntryClientId,
+  optimisticTemplateExercise,
+  patchWorkoutExerciseCaches,
+  rememberWorkoutEntryServerId,
+  removeWorkoutEntryFromCaches,
+  resolveWorkoutEntryServerId,
+  restoreWorkoutExerciseCaches,
+  setPendingWorkoutCreate,
+  snapshotWorkoutExerciseCaches,
+  takePendingWorkoutCreate,
+  templateExercisesFromBoard,
+  upsertWorkoutEntryInCaches,
+  workoutBoardQueryKey,
+  workoutEntryMotion,
+  workoutTemplateExercisesQueryKey,
+  type WorkoutBoardData,
+} from '../lib/workout-entry-ui';
 import {
   DEFAULT_WEIGHT_UNIT,
   WEEKDAYS,
@@ -76,30 +95,50 @@ export function WorkoutsPage({
     queryFn: () => api.getExercises(opts) as Promise<Exercise[]>,
   });
 
+  // Keep board cache warm on mobile so add/delete patches sync when switching to desktop.
+  useQuery({
+    queryKey: workoutBoardQueryKey(forUserId),
+    staleTime: 15_000,
+    queryFn: async (): Promise<WorkoutBoardData> => {
+      await api.ensureWorkoutBoard(opts);
+      const [boardTemplates, entries, block] = await Promise.all([
+        api.getWorkoutTemplates(opts) as Promise<WorkoutBoardData['templates']>,
+        api.getAllWorkoutTemplateExercises(opts) as Promise<WorkoutTemplateExercise[]>,
+        api.getWorkoutBlock(opts) as Promise<WorkoutBoardData['block']>,
+      ]);
+      return { templates: boardTemplates, entries, block };
+    },
+  });
+
+  const templateExercisesQueryKey = workoutTemplateExercisesQueryKey(
+    selectedTemplateId,
+    forUserId,
+  );
+
   const templateExercisesQuery = useQuery({
-    queryKey: ['workout-template-exercises', selectedTemplateId, forUserId],
+    queryKey: templateExercisesQueryKey,
     enabled: !!selectedTemplateId,
-    queryFn: () =>
-      api.getWorkoutTemplateExercises(selectedTemplateId!, opts) as Promise<
-        WorkoutTemplateExercise[]
-      >,
+    staleTime: 15_000,
+    placeholderData: () =>
+      selectedTemplateId
+        ? templateExercisesFromBoard(queryClient, forUserId, selectedTemplateId)
+        : undefined,
+    queryFn: async () =>
+      (await api.getWorkoutTemplateExercises(
+        selectedTemplateId!,
+        opts,
+      )) as WorkoutTemplateExercise[],
   });
 
   const templates = templatesQuery.data ?? [];
   const exercises = exercisesQuery.data ?? [];
   const templateExercises = templateExercisesQuery.data ?? [];
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
+  const actingUserId = forUserId ?? user?.id ?? '';
   const exerciseMap = useMemo(
     () => new Map(exercises.map((ex) => [ex.id, ex.name])),
     [exercises],
   );
-
-  const invalidateTemplateExercises = async () => {
-    await queryClient.invalidateQueries({
-      queryKey: ['workout-template-exercises', selectedTemplateId, forUserId],
-    });
-    await queryClient.invalidateQueries({ queryKey: ['workout-board', forUserId] });
-  };
 
   const selectTemplate = (id: string) => {
     setSelectedTemplateId(id);
@@ -171,24 +210,144 @@ export function WorkoutsPage({
       prescriptionKind: values.prescriptionKind,
       prescriptionValue: values.prescriptionValue,
     };
+
     if (entryDialog.mode === 'add') {
-      await api.addWorkoutTemplateExercise(
+      const tempId = crypto.randomUUID();
+      const snapshot = snapshotWorkoutExerciseCaches(
+        queryClient,
+        forUserId,
         selectedTemplateId,
-        { ...payload, sortIndex: templateExercises.length },
-        opts,
       );
-    } else {
-      await api.updateWorkoutTemplateExercise(entryDialog.entry.id, payload, opts);
+      const optimistic = optimisticTemplateExercise({
+        id: tempId,
+        userId: actingUserId,
+        templateId: selectedTemplateId,
+        ...payload,
+        sortIndex: templateExercises.length,
+      });
+
+      upsertWorkoutEntryInCaches(
+        queryClient,
+        forUserId,
+        selectedTemplateId,
+        optimistic,
+      );
+
+      const createPromise = (async () => {
+        const created = (await api.addWorkoutTemplateExercise(
+          selectedTemplateId,
+          { ...payload, sortIndex: templateExercises.length },
+          opts,
+        )) as WorkoutTemplateExercise;
+        rememberWorkoutEntryServerId(tempId, created.id);
+        patchWorkoutExerciseCaches(queryClient, forUserId, selectedTemplateId, (rows) =>
+          rows.map((entry) => (entry.id === tempId ? created : entry)),
+        );
+        forgetWorkoutEntryClientId(tempId);
+        return created.id;
+      })();
+
+      setPendingWorkoutCreate(tempId, createPromise);
+      void createPromise.catch((err: unknown) => {
+        forgetWorkoutEntryClientId(tempId);
+        restoreWorkoutExerciseCaches(
+          queryClient,
+          forUserId,
+          selectedTemplateId,
+          snapshot,
+        );
+        setError(err instanceof Error ? err.message : 'Failed to add exercise');
+      });
+      return;
     }
-    await invalidateTemplateExercises();
+
+    const entryId = entryDialog.entry.id;
+    const snapshot = snapshotWorkoutExerciseCaches(
+      queryClient,
+      forUserId,
+      selectedTemplateId,
+    );
+    const optimisticPatch: WorkoutTemplateExercise = {
+      ...entryDialog.entry,
+      ...payload,
+      exerciseId: payload.exerciseId,
+      bodyPart: payload.bodyPart,
+      updatedAt: new Date().toISOString(),
+    };
+
+    upsertWorkoutEntryInCaches(
+      queryClient,
+      forUserId,
+      selectedTemplateId,
+      optimisticPatch,
+      entryId,
+    );
+
+    try {
+      const updated = (await api.updateWorkoutTemplateExercise(
+        resolveWorkoutEntryServerId(entryId),
+        payload,
+        opts,
+      )) as WorkoutTemplateExercise;
+      patchWorkoutExerciseCaches(queryClient, forUserId, selectedTemplateId, (rows) =>
+        rows.map((entry) =>
+          entry.id === entryId || entry.id === updated.id ? updated : entry,
+        ),
+      );
+    } catch (err) {
+      restoreWorkoutExerciseCaches(
+        queryClient,
+        forUserId,
+        selectedTemplateId,
+        snapshot,
+      );
+      throw err;
+    }
   };
 
   const removeExercise = async (id: string) => {
+    if (!selectedTemplateId) return;
     setError('');
+    const snapshot = snapshotWorkoutExerciseCaches(
+      queryClient,
+      forUserId,
+      selectedTemplateId,
+    );
+
+    removeWorkoutEntryFromCaches(queryClient, forUserId, selectedTemplateId, id);
+
+    if (entryDialog?.mode === 'edit' && entryDialog.entry.id === id) {
+      setEntryDialog(null);
+    }
+
+    const pending = takePendingWorkoutCreate(id);
+    if (pending) {
+      try {
+        const serverId = await pending;
+        forgetWorkoutEntryClientId(id);
+        await api.deleteWorkoutTemplateExercise(serverId, opts);
+      } catch (err) {
+        restoreWorkoutExerciseCaches(
+          queryClient,
+          forUserId,
+          selectedTemplateId,
+          snapshot,
+        );
+        setError(err instanceof Error ? err.message : 'Failed to remove row');
+      }
+      return;
+    }
+
     try {
-      await api.deleteWorkoutTemplateExercise(id, opts);
-      await invalidateTemplateExercises();
+      await api.deleteWorkoutTemplateExercise(resolveWorkoutEntryServerId(id), opts);
+      forgetWorkoutEntryClientId(id);
     } catch (err) {
+      restoreWorkoutExerciseCaches(
+        queryClient,
+        forUserId,
+        selectedTemplateId,
+        snapshot,
+      );
       setError(err instanceof Error ? err.message : 'Failed to remove row');
     }
   };
@@ -402,21 +561,24 @@ export function WorkoutsPage({
                       </Button>
                     </div>
 
-                    {templateExercises.length === 0 ? (
+                    {templateExercises.length === 0 && (
                       <p className="text-sm text-muted-foreground">
                         No exercises yet. Tap Add to include an exercise or body part.
                       </p>
-                    ) : (
-                      <ul className="space-y-2">
+                    )}
+                    <ul className="space-y-2">
+                      <AnimatePresence initial={false} mode="popLayout">
                         {templateExercises.map((row) => {
                           const summary = formatExercisePrescriptionSummary({
                             ...row,
                             weightUnit,
                           });
                           return (
-                            <li
+                            <motion.li
                               key={row.id}
-                              className="flex items-start justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                              layout
+                              {...workoutEntryMotion}
+                              className="flex items-start justify-between gap-2 overflow-hidden rounded-md border border-border px-3 py-2 text-sm"
                             >
                               <button
                                 type="button"
@@ -441,11 +603,11 @@ export function WorkoutsPage({
                               >
                                 Remove
                               </Button>
-                            </li>
+                            </motion.li>
                           );
                         })}
-                      </ul>
-                    )}
+                      </AnimatePresence>
+                    </ul>
                   </div>
                 </div>
               )}
