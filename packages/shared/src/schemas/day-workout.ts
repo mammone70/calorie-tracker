@@ -1,7 +1,6 @@
 import { z } from 'zod';
-import { PRESCRIPTION_KINDS, WORKOUT_SET_STATUSES } from '../constants';
-import { refinePrescription } from './workout-template';
-
+import { BODY_PARTS, PRESCRIPTION_KINDS, WORKOUT_SET_STATUSES } from '../constants';
+import { refinePrescription, refineWorkoutEntryTarget } from './workout-template';
 export const workoutSetLogSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
@@ -34,26 +33,31 @@ export const confirmWorkoutSetSchema = z.object({
 
 export const createDayWorkoutExerciseSchema = z
   .object({
-    exerciseId: z.string().uuid(),
+    exerciseId: z.string().uuid().nullable().optional(),
+    bodyPart: z.enum(BODY_PARTS).nullable().optional(),
+    weekIndex: z.number().int().min(1).max(52).default(1),
     sortIndex: z.number().int().min(0).default(0),
-    targetSets: z.number().int().min(1).max(50),
-    repsMin: z.number().int().min(0).max(999),
-    repsMax: z.number().int().min(0).max(999),
+    targetSets: z.number().int().min(1).max(50).nullable().optional(),
+    repsMin: z.number().int().min(0).max(999).nullable().optional(),
+    repsMax: z.number().int().min(0).max(999).nullable().optional(),
     targetWeight: z.number().nonnegative().nullable().optional(),
     prescriptionKind: z.enum(PRESCRIPTION_KINDS).default('none'),
     prescriptionValue: z.number().nonnegative().nullable().optional(),
   })
-  .superRefine(refinePrescription);
+  .superRefine(refinePrescription)
+  .superRefine(refineWorkoutEntryTarget);
 
 export const dayWorkoutExerciseSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
   sessionId: z.string().uuid(),
-  exerciseId: z.string().uuid(),
+  exerciseId: z.string().uuid().nullable(),
+  bodyPart: z.string().nullable(),
+  weekIndex: z.number().int(),
   sortIndex: z.number().int(),
-  targetSets: z.number().int(),
-  repsMin: z.number().int(),
-  repsMax: z.number().int(),
+  targetSets: z.number().int().nullable(),
+  repsMin: z.number().int().nullable(),
+  repsMax: z.number().int().nullable(),
   targetWeight: z.number().nullable().optional(),
   prescriptionKind: z.enum(PRESCRIPTION_KINDS),
   prescriptionValue: z.number().nullable().optional(),

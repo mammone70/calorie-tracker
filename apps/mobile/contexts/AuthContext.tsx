@@ -6,8 +6,8 @@ import { runSync } from '../lib/sync';
 type AuthContextValue = {
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, trustedDevice?: boolean) => Promise<void>;
+  register: (email: string, password: string, trustedDevice?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   sync: () => Promise<void>;
 };
@@ -36,15 +36,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const result = await api.login(email, password);
+  const login = async (email: string, password: string, trustedDevice = true) => {
+    const result = await api.login(email, password, trustedDevice);
     await api.setTokens(result.accessToken, result.refreshToken, result.user.id);
     setIsAuthenticated(true);
     await runSync();
   };
 
-  const register = async (email: string, password: string) => {
-    const result = await api.register(email, password);
+  const register = async (email: string, password: string, trustedDevice = true) => {
+    const result = await api.register(email, password, trustedDevice);
     await api.setTokens(result.accessToken, result.refreshToken, result.user.id);
     setIsAuthenticated(true);
   };

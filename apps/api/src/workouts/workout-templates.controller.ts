@@ -117,6 +117,15 @@ export class WorkoutTemplateExercisesController {
     private readonly workoutsService: WorkoutsService,
   ) {}
 
+  @Get()
+  async listAll(
+    @Req() req: { user: AuthUser },
+    @Query(zodPipe(forUserIdQuerySchema)) query: { forUserId?: string },
+  ) {
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    return this.workoutsService.listAllTemplateExercises(userId);
+  }
+
   @Patch(':id')
   async update(
     @Req() req: { user: AuthUser },

@@ -225,11 +225,27 @@ docker compose -f docker-compose.prod.yml up -d api
 
 ### Port user data from dev to production
 
-Export on your dev machine (local Postgres running, same schema):
+Export on your dev machine (local Postgres running, same schema). The export includes
+foods/plans/logs plus the exercise catalog (global + personal), workout templates,
+and day workout history:
 
 ```bash
 pnpm --filter @calorie-tracker/db export:user mammone@gmail.com mammone-export.json
 ```
+
+**Exercises / workouts only** (does not touch foods or meal plans):
+
+```bash
+pnpm --filter @calorie-tracker/db export:exercises mammone@gmail.com exercises-export.json
+# scp to VPS, then:
+docker compose -f docker-compose.prod.yml run --rm \
+  -v /opt/calorie-tracker/exercises-export.json:/app/exercises-export.json:ro \
+  --entrypoint node api \
+  packages/db/scripts/import-exercises.js exercises-export.json mammone@gmail.com --replace
+```
+
+If you only need the shared exercise name list (not templates/history), you can instead run
+`seed-exercises.js` on production against an admin email — that seeds the curated global set.
 
 Create the same user on production if needed (password can differ from dev). After importing, promote to admin if this is your account:
 

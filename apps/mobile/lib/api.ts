@@ -15,6 +15,7 @@ class ApiClient {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
   private userId: string | null = null;
+  private refreshPromise: Promise<boolean> | null = null;
 
   async init() {
     this.accessToken = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
@@ -80,34 +81,44 @@ class ApiClient {
   }
 
   private async tryRefresh() {
-    try {
-      const data = await this.request<{ accessToken: string; refreshToken: string }>(
-        '/auth/refresh',
-        {
-          method: 'POST',
-          body: { refreshToken: this.refreshToken },
-          auth: false,
-        },
-      );
-      await this.setTokens(data.accessToken, data.refreshToken);
-      return true;
-    } catch {
-      await this.clearTokens();
-      return false;
+    if (this.refreshPromise) {
+      return this.refreshPromise;
     }
+
+    this.refreshPromise = (async () => {
+      try {
+        const data = await this.request<{ accessToken: string; refreshToken: string }>(
+          '/auth/refresh',
+          {
+            method: 'POST',
+            body: { refreshToken: this.refreshToken },
+            auth: false,
+          },
+        );
+        await this.setTokens(data.accessToken, data.refreshToken);
+        return true;
+      } catch {
+        await this.clearTokens();
+        return false;
+      } finally {
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
   }
 
-  register(email: string, password: string) {
+  register(email: string, password: string, trustedDevice = true) {
     return this.request<{ user: { id: string; email: string }; accessToken: string; refreshToken: string }>(
       '/auth/register',
-      { method: 'POST', body: { email, password }, auth: false },
+      { method: 'POST', body: { email, password, trustedDevice }, auth: false },
     );
   }
 
-  login(email: string, password: string) {
+  login(email: string, password: string, trustedDevice = true) {
     return this.request<{ user: { id: string; email: string }; accessToken: string; refreshToken: string }>(
       '/auth/login',
-      { method: 'POST', body: { email, password }, auth: false },
+      { method: 'POST', body: { email, password, trustedDevice }, auth: false },
     );
   }
 

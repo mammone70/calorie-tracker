@@ -3,24 +3,26 @@ import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { ExercisePicker } from '../components/ExercisePicker';
 import { PageHeader } from '../components/PageHeader';
+import { WorkoutEntryDialog, type WorkoutEntryFormValues } from '../components/WorkoutEntryDialog';
+import { WorkoutProgramBoard } from '../components/WorkoutProgramBoard';
 import { useAuth } from '../contexts/AuthContext';
+import { useMinWidth } from '../hooks/useMinWidth';
 import { api } from '../lib/client';
 import {
   DEFAULT_WEIGHT_UNIT,
   WEEKDAYS,
   formatExercisePrescriptionSummary,
-  type PrescriptionKind,
+  workoutEntryLabel,
 } from '@calorie-tracker/shared';
 import type {
   Exercise,
@@ -38,13 +40,6 @@ type WorkoutsPageProps = {
   title?: string;
 };
 
-const PRESCRIPTION_OPTIONS: { value: PrescriptionKind; label: string }[] = [
-  { value: 'none', label: 'No intensity cue' },
-  { value: 'rpe', label: 'RPE' },
-  { value: 'rir', label: 'RIR' },
-  { value: 'load_increase', label: 'Increase vs last' },
-];
-
 export function WorkoutsPage({
   forUserId,
   backTo = '/exercises',
@@ -52,6 +47,9 @@ export function WorkoutsPage({
 }: WorkoutsPageProps) {
   const { user } = useAuth();
   const weightUnit = user?.weightUnit ?? DEFAULT_WEIGHT_UNIT;
+  // Spreadsheet needs horizontal room; don't rely only on Tailwind `md` (can miss
+  // some desktop / maximized windows depending on zoom and chrome).
+  const showProgramBoard = useMinWidth(700);
   const queryClient = useQueryClient();
   const opts = forUserOpts(forUserId);
   const [name, setName] = useState('');
@@ -61,14 +59,11 @@ export function WorkoutsPage({
   const [anchorDate, setAnchorDate] = useState(todayDateString());
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
-  const [exerciseId, setExerciseId] = useState('');
-  const [targetSets, setTargetSets] = useState(3);
-  const [repsMode, setRepsMode] = useState<'exact' | 'range'>('exact');
-  const [repsMin, setRepsMin] = useState(8);
-  const [repsMax, setRepsMax] = useState(8);
-  const [targetWeight, setTargetWeight] = useState('');
-  const [prescriptionKind, setPrescriptionKind] = useState<PrescriptionKind>('none');
-  const [prescriptionValue, setPrescriptionValue] = useState('');
+  const [entryDialog, setEntryDialog] = useState<
+    | { mode: 'add' }
+    | { mode: 'edit'; entry: WorkoutTemplateExercise }
+    | null
+  >(null);
   const [error, setError] = useState('');
 
   const templatesQuery = useQuery({
@@ -92,16 +87,31 @@ export function WorkoutsPage({
 
   const templates = templatesQuery.data ?? [];
   const exercises = exercisesQuery.data ?? [];
+  const templateExercises = templateExercisesQuery.data ?? [];
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
   const exerciseMap = useMemo(
-    () => new Map(exercises.map((ex) => [ex.id, ex])),
+    () => new Map(exercises.map((ex) => [ex.id, ex.name])),
     [exercises],
   );
+
+  const invalidateTemplateExercises = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ['workout-template-exercises', selectedTemplateId, forUserId],
+    });
+    await queryClient.invalidateQueries({ queryKey: ['workout-board', forUserId] });
+  };
 
   const selectTemplate = (id: string) => {
     setSelectedTemplateId(id);
     const template = templates.find((t) => t.id === id);
     setEditName(template?.name ?? '');
+    setError('');
+  };
+
+  const closeEditor = () => {
+    setSelectedTemplateId(null);
+    setEditName('');
+    setEntryDialog(null);
   };
 
   const renameTemplate = async () => {
@@ -110,19 +120,11 @@ export function WorkoutsPage({
     try {
       await api.updateWorkoutTemplate(selectedTemplateId, { name: editName.trim() }, opts);
       await queryClient.invalidateQueries({ queryKey: ['workout-templates', forUserId] });
+      await queryClient.invalidateQueries({ queryKey: ['workout-board', forUserId] });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to rename workout');
     }
   };
-
-  const prescriptionPlaceholder =
-    prescriptionKind === 'rpe'
-      ? 'RPE 1–10'
-      : prescriptionKind === 'rir'
-        ? 'RIR 0–10'
-        : prescriptionKind === 'load_increase'
-          ? `+${weightUnit}`
-          : '';
 
   const createTemplate = async () => {
     setError('');
@@ -141,6 +143,7 @@ export function WorkoutsPage({
       setName('');
       selectTemplate(created.id);
       await queryClient.invalidateQueries({ queryKey: ['workout-templates', forUserId] });
+      await queryClient.invalidateQueries({ queryKey: ['workout-board', forUserId] });
       setEditName(created.name);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create template');
@@ -150,53 +153,44 @@ export function WorkoutsPage({
   const deleteTemplate = async (id: string) => {
     if (!confirm('Delete this template?')) return;
     await api.deleteWorkoutTemplate(id, opts);
-    if (selectedTemplateId === id) {
-      setSelectedTemplateId(null);
-      setEditName('');
-    }
+    if (selectedTemplateId === id) closeEditor();
     await queryClient.invalidateQueries({ queryKey: ['workout-templates', forUserId] });
+    await queryClient.invalidateQueries({ queryKey: ['workout-board', forUserId] });
   };
 
-  const addExercise = async () => {
-    if (!selectedTemplateId || !exerciseId) return;
-    setError('');
-    const resolvedRepsMin = repsMin;
-    const resolvedRepsMax = repsMode === 'exact' ? repsMin : repsMax;
-    try {
+  const saveMobileEntry = async (values: WorkoutEntryFormValues) => {
+    if (!selectedTemplateId || !entryDialog) return;
+    const payload = {
+      exerciseId: values.exerciseId,
+      bodyPart: values.bodyPart,
+      weekIndex: values.weekIndex,
+      targetSets: values.targetSets,
+      repsMin: values.repsMin,
+      repsMax: values.repsMax,
+      targetWeight: values.targetWeight,
+      prescriptionKind: values.prescriptionKind,
+      prescriptionValue: values.prescriptionValue,
+    };
+    if (entryDialog.mode === 'add') {
       await api.addWorkoutTemplateExercise(
         selectedTemplateId,
-        {
-          exerciseId,
-          targetSets,
-          repsMin: resolvedRepsMin,
-          repsMax: resolvedRepsMax,
-          targetWeight: targetWeight === '' ? null : Number(targetWeight),
-          prescriptionKind,
-          prescriptionValue:
-            prescriptionKind === 'none' || prescriptionValue === ''
-              ? null
-              : Number(prescriptionValue),
-          sortIndex: (templateExercisesQuery.data ?? []).length,
-        },
+        { ...payload, sortIndex: templateExercises.length },
         opts,
       );
-      setExerciseId('');
-      setTargetWeight('');
-      setPrescriptionKind('none');
-      setPrescriptionValue('');
-      await queryClient.invalidateQueries({
-        queryKey: ['workout-template-exercises', selectedTemplateId, forUserId],
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add exercise');
+    } else {
+      await api.updateWorkoutTemplateExercise(entryDialog.entry.id, payload, opts);
     }
+    await invalidateTemplateExercises();
   };
 
   const removeExercise = async (id: string) => {
-    await api.deleteWorkoutTemplateExercise(id, opts);
-    await queryClient.invalidateQueries({
-      queryKey: ['workout-template-exercises', selectedTemplateId, forUserId],
-    });
+    setError('');
+    try {
+      await api.deleteWorkoutTemplateExercise(id, opts);
+      await invalidateTemplateExercises();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove row');
+    }
   };
 
   const scheduleLabel = (t: WorkoutTemplate) => {
@@ -209,345 +203,268 @@ export function WorkoutsPage({
   return (
     <div>
       {forUserId ? <PageHeader title={title} backTo={backTo} /> : null}
-      <div className="mx-auto w-full min-w-0 max-w-lg space-y-4 px-4 pb-8 pt-4">
+      <div
+        className={cn(
+          'mx-auto w-full min-w-0 space-y-4 px-4 pb-8 pt-4',
+          showProgramBoard ? 'max-w-[1400px]' : 'max-w-lg',
+        )}
+      >
         {!forUserId && (
-          <>
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h1 className="text-lg font-bold">{title}</h1>
-            <Button variant="outline" className="w-full" asChild>
+            <Button variant="outline" asChild>
               <Link to="/exercises">Exercise library</Link>
             </Button>
-          </>
+          </div>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>New workout</CardTitle>
-            <CardDescription>
-              Give it a title (Heavy Upper, ME DL…), then choose when it runs
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="workout-title">Workout title</Label>
-              <Input
-                id="workout-title"
-                placeholder="e.g. Heavy Upper, Light Lower, ME DL"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className={cn(inputFieldClass)}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Schedule</Label>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={scheduleKind === 'weekday' ? 'default' : 'outline'}
-                  className="flex-1"
-                  onClick={() => setScheduleKind('weekday')}
-                >
-                  Weekday
-                </Button>
-                <Button
-                  type="button"
-                  variant={scheduleKind === 'interval' ? 'default' : 'outline'}
-                  className="flex-1"
-                  onClick={() => setScheduleKind('interval')}
-                >
-                  Every N days
-                </Button>
-              </div>
-            </div>
-            {scheduleKind === 'weekday' ? (
-              <div className="space-y-1">
-                <Label htmlFor="workout-weekday">Day of week</Label>
-                <select
-                  id="workout-weekday"
-                  className={cn(inputFieldClass)}
-                  value={dayOfWeek}
-                  onChange={(e) => setDayOfWeek(Number(e.target.value))}
-                >
-                  {WEEKDAYS.map((label, index) => (
-                    <option key={label} value={index}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label htmlFor="workout-interval">Every N days</Label>
-                  <Input
-                    id="workout-interval"
-                    type="number"
-                    min={1}
-                    value={intervalDays}
-                    onChange={(e) => setIntervalDays(Number(e.target.value))}
-                    className={cn(inputFieldClass)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="workout-anchor">Anchor date</Label>
-                  <Input
-                    id="workout-anchor"
-                    type="date"
-                    value={anchorDate}
-                    onChange={(e) => setAnchorDate(e.target.value)}
-                    className={cn(inputFieldClass)}
-                  />
-                </div>
-              </div>
-            )}
-            <Button className="w-full" disabled={!name.trim()} onClick={() => void createTemplate()}>
-              Create workout
-            </Button>
-          </CardContent>
-        </Card>
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        <ul className="space-y-2">
-          {templates.map((template) => (
-            <li key={template.id}>
-              <Card
-                className={cn(
-                  'cursor-pointer',
-                  selectedTemplateId === template.id && 'ring-2 ring-primary',
-                )}
-                onClick={() => selectTemplate(template.id)}
-              >
-                <CardHeader>
-                  <CardTitle className="text-base">{template.name}</CardTitle>
-                  <CardDescription>{scheduleLabel(template)}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button
-                    variant="link"
-                    className="h-auto p-0 text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void deleteTemplate(template.id);
-                    }}
-                  >
-                    Delete
-                  </Button>
-                </CardContent>
-              </Card>
-            </li>
-          ))}
-        </ul>
-
-        {selectedTemplate && (
+        {showProgramBoard ? (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle>Program board</CardTitle>
+              <CardDescription>
+                Plan the block like a spreadsheet — days across, weeks down. Each cell can be an
+                exercise or a body part.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <WorkoutProgramBoard forUserId={forUserId} exercises={exercises} />
+            </CardContent>
+          </Card>
+        ) : (
+        <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Edit workout</CardTitle>
-              <CardDescription>{scheduleLabel(selectedTemplate)}</CardDescription>
+              <CardTitle>New workout</CardTitle>
+              <CardDescription>
+                Give it a title (Heavy Upper, ME DL…), then choose when it runs
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-1">
-                <Label htmlFor="edit-workout-title">Workout title</Label>
+                <Label htmlFor="workout-title">Workout title</Label>
+                <Input
+                  id="workout-title"
+                  placeholder="e.g. Heavy Upper, Light Lower, ME DL"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className={cn(inputFieldClass)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Schedule</Label>
                 <div className="flex gap-2">
-                  <Input
-                    id="edit-workout-title"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className={cn(inputFieldClass)}
-                    placeholder="e.g. Heavy Upper"
-                  />
                   <Button
                     type="button"
-                    variant="outline"
-                    disabled={!editName.trim() || editName.trim() === selectedTemplate.name}
-                    onClick={() => void renameTemplate()}
+                    variant={scheduleKind === 'weekday' ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setScheduleKind('weekday')}
                   >
-                    Save
+                    Weekday
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={scheduleKind === 'interval' ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setScheduleKind('interval')}
+                  >
+                    Every N days
                   </Button>
                 </div>
               </div>
-
-              <div className="border-t border-border pt-3">
-                <p className="mb-2 text-sm font-medium">Exercises</p>
-                <p className="mb-3 text-xs text-muted-foreground">
-                  Sets × exact reps or a range, optional weight ({weightUnit}), and intensity cue
-                </p>
-              <ExercisePicker
-                exercises={exercises}
-                value={exerciseId}
-                onChange={setExerciseId}
-              />
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={repsMode === 'exact' ? 'default' : 'outline'}
-                  className="flex-1"
-                  onClick={() => {
-                    setRepsMode('exact');
-                    setRepsMax(repsMin);
-                  }}
-                >
-                  Exact reps
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={repsMode === 'range' ? 'default' : 'outline'}
-                  className="flex-1"
-                  onClick={() => {
-                    setRepsMode('range');
-                    if (repsMax <= repsMin) setRepsMax(repsMin + 2);
-                  }}
-                >
-                  Rep range
-                </Button>
-              </div>
-              <div className={cn('grid gap-2', repsMode === 'exact' ? 'grid-cols-3' : 'grid-cols-4')}>
+              {scheduleKind === 'weekday' ? (
                 <div className="space-y-1">
-                  <Label htmlFor="template-sets">Sets</Label>
-                  <Input
-                    id="template-sets"
-                    type="number"
-                    min={1}
-                    value={targetSets}
-                    onChange={(e) => setTargetSets(Number(e.target.value))}
+                  <Label htmlFor="workout-weekday">Day of week</Label>
+                  <select
+                    id="workout-weekday"
                     className={cn(inputFieldClass)}
-                  />
+                    value={dayOfWeek}
+                    onChange={(e) => setDayOfWeek(Number(e.target.value))}
+                  >
+                    {WEEKDAYS.map((label, index) => (
+                      <option key={label} value={index}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                {repsMode === 'exact' ? (
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <Label htmlFor="template-reps">Reps</Label>
+                    <Label htmlFor="workout-interval">Every N days</Label>
                     <Input
-                      id="template-reps"
+                      id="workout-interval"
                       type="number"
-                      min={0}
-                      value={repsMin}
-                      onChange={(e) => {
-                        const value = Number(e.target.value);
-                        setRepsMin(value);
-                        setRepsMax(value);
-                      }}
+                      min={1}
+                      value={intervalDays}
+                      onChange={(e) => setIntervalDays(Number(e.target.value))}
                       className={cn(inputFieldClass)}
                     />
                   </div>
-                ) : (
-                  <>
-                    <div className="space-y-1">
-                      <Label htmlFor="template-reps-min">Reps min</Label>
-                      <Input
-                        id="template-reps-min"
-                        type="number"
-                        min={0}
-                        value={repsMin}
-                        onChange={(e) => setRepsMin(Number(e.target.value))}
-                        className={cn(inputFieldClass)}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="template-reps-max">Reps max</Label>
-                      <Input
-                        id="template-reps-max"
-                        type="number"
-                        min={0}
-                        value={repsMax}
-                        onChange={(e) => setRepsMax(Number(e.target.value))}
-                        className={cn(inputFieldClass)}
-                      />
-                    </div>
-                  </>
-                )}
-                <div className="space-y-1">
-                  <Label htmlFor="template-weight">Weight ({weightUnit})</Label>
-                  <Input
-                    id="template-weight"
-                    type="number"
-                    min={0}
-                    step="0.5"
-                    value={targetWeight}
-                    onChange={(e) => setTargetWeight(e.target.value)}
-                    className={cn(inputFieldClass)}
-                    placeholder="Optional"
-                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="workout-anchor">Anchor date</Label>
+                    <Input
+                      id="workout-anchor"
+                      type="date"
+                      value={anchorDate}
+                      onChange={(e) => setAnchorDate(e.target.value)}
+                      className={cn(inputFieldClass)}
+                    />
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label htmlFor="template-intensity">Intensity</Label>
-                  <Select
-                    value={prescriptionKind}
-                    onValueChange={(value) => {
-                      const kind = value as PrescriptionKind;
-                      setPrescriptionKind(kind);
-                      if (kind === 'none') setPrescriptionValue('');
-                    }}
-                  >
-                    <SelectTrigger id="template-intensity" className="w-full">
-                      <SelectValue placeholder="Intensity" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PRESCRIPTION_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="template-intensity-value">
-                    {prescriptionKind === 'rpe'
-                      ? 'RPE'
-                      : prescriptionKind === 'rir'
-                        ? 'RIR'
-                        : prescriptionKind === 'load_increase'
-                          ? `Increase (${weightUnit})`
-                          : 'Value'}
-                  </Label>
-                  <Input
-                    id="template-intensity-value"
-                    type="number"
-                    min={0}
-                    step="0.5"
-                    value={prescriptionValue}
-                    disabled={prescriptionKind === 'none'}
-                    onChange={(e) => setPrescriptionValue(e.target.value)}
-                    className={cn(inputFieldClass)}
-                    placeholder={prescriptionPlaceholder || '—'}
-                  />
-                </div>
-              </div>
-              <Button className="w-full" disabled={!exerciseId} onClick={() => void addExercise()}>
-                Add exercise
+              )}
+              <Button className="w-full" disabled={!name.trim()} onClick={() => void createTemplate()}>
+                Create workout
               </Button>
+            </CardContent>
+          </Card>
 
-              <ul className="space-y-2">
-                {(templateExercisesQuery.data ?? []).map((row) => (
-                  <li
-                    key={row.id}
-                    className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
-                  >
-                    <div>
-                      <p className="font-medium">{exerciseMap.get(row.exerciseId)?.name ?? 'Exercise'}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatExercisePrescriptionSummary({
-                          ...row,
-                          weightUnit,
-                        })}
-                      </p>
-                    </div>
+          {error && !selectedTemplate && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
+
+          <ul className="space-y-2">
+            {templates.map((template) => (
+              <li key={template.id}>
+                <Card
+                  className="cursor-pointer transition-colors active:bg-muted/40"
+                  onClick={() => selectTemplate(template.id)}
+                >
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">{template.name}</CardTitle>
+                    <CardDescription>{scheduleLabel(template)}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
                     <Button
                       variant="link"
                       className="h-auto p-0 text-destructive"
-                      onClick={() => void removeExercise(row.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void deleteTemplate(template.id);
+                      }}
                     >
-                      Remove
+                      Delete
                     </Button>
-                  </li>
-                ))}
-              </ul>
-              </div>
-            </CardContent>
-          </Card>
+                  </CardContent>
+                </Card>
+              </li>
+            ))}
+          </ul>
+
+          <Dialog
+            open={!!selectedTemplate}
+            onOpenChange={(open) => {
+              if (!open) closeEditor();
+            }}
+          >
+            <DialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+              <DialogHeader className="border-b border-border px-4 py-4 pr-12">
+                <DialogTitle>Edit workout</DialogTitle>
+                <DialogDescription>
+                  {selectedTemplate ? scheduleLabel(selectedTemplate) : null}
+                </DialogDescription>
+              </DialogHeader>
+
+              {selectedTemplate && (
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+                  {error && <p className="text-sm text-destructive">{error}</p>}
+
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-workout-title">Workout title</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="edit-workout-title"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className={cn(inputFieldClass)}
+                        placeholder="e.g. Heavy Upper"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={!editName.trim() || editName.trim() === selectedTemplate.name}
+                        onClick={() => void renameTemplate()}
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 border-t border-border pt-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium">Exercises</p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => setEntryDialog({ mode: 'add' })}
+                      >
+                        Add
+                      </Button>
+                    </div>
+
+                    {templateExercises.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No exercises yet. Tap Add to include an exercise or body part.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {templateExercises.map((row) => {
+                          const summary = formatExercisePrescriptionSummary({
+                            ...row,
+                            weightUnit,
+                          });
+                          return (
+                            <li
+                              key={row.id}
+                              className="flex items-start justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                            >
+                              <button
+                                type="button"
+                                className="min-w-0 flex-1 text-left"
+                                onClick={() => setEntryDialog({ mode: 'edit', entry: row })}
+                              >
+                                <p className="font-medium">
+                                  {workoutEntryLabel(row, exerciseMap)}
+                                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                    W{row.weekIndex ?? 1}
+                                    {row.bodyPart ? ' · body part' : ''}
+                                  </span>
+                                </p>
+                                {summary ? (
+                                  <p className="text-xs text-muted-foreground">{summary}</p>
+                                ) : null}
+                              </button>
+                              <Button
+                                variant="link"
+                                className="h-auto shrink-0 p-0 text-destructive"
+                                onClick={() => void removeExercise(row.id)}
+                              >
+                                Remove
+                              </Button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+
+          <WorkoutEntryDialog
+            open={entryDialog != null}
+            onOpenChange={(open) => {
+              if (!open) setEntryDialog(null);
+            }}
+            mode={entryDialog?.mode === 'edit' ? 'edit' : 'add'}
+            exercises={exercises}
+            weightUnit={weightUnit}
+            initial={entryDialog?.mode === 'edit' ? entryDialog.entry : null}
+            showWeekIndex
+            onSubmit={saveMobileEntry}
+          />
+        </div>
         )}
       </div>
     </div>

@@ -36,7 +36,14 @@ export function AppLayout() {
       )}
       {showBrandHeader && (
         <header className="sticky top-0 z-30 border-b border-border/60 bg-app py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
-          <div className="mx-auto flex w-full min-w-0 max-w-lg items-center justify-between gap-3 px-4">
+          <div
+            className={cn(
+              'mx-auto flex w-full min-w-0 items-center justify-between gap-3 px-4',
+              pathname.startsWith('/workouts') || pathname.startsWith('/exercises')
+                ? 'max-w-[1400px]'
+                : 'max-w-lg',
+            )}
+          >
             <h1 className="truncate text-lg font-bold text-primary">Fitty Kitties</h1>
             <HeaderActions />
           </div>

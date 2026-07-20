@@ -16,11 +16,13 @@ export type DayWorkoutSessionLike = {
 export type DayWorkoutExerciseLike = {
   id: string;
   sessionId: string;
-  exerciseId: string;
+  exerciseId?: string | null;
+  bodyPart?: string | null;
+  weekIndex?: number;
   sortIndex: number;
-  targetSets: number;
-  repsMin: number;
-  repsMax: number;
+  targetSets?: number | null;
+  repsMin?: number | null;
+  repsMax?: number | null;
   targetWeight?: number | null;
   prescriptionKind?: PrescriptionKind;
   prescriptionValue?: number | null;
@@ -29,17 +31,43 @@ export type DayWorkoutExerciseLike = {
 
 export type EffectiveWorkoutExercise = {
   id: string;
-  exerciseId: string;
+  exerciseId: string | null;
+  bodyPart: string | null;
+  weekIndex: number;
   sortIndex: number;
-  targetSets: number;
-  repsMin: number;
-  repsMax: number;
+  targetSets: number | null;
+  repsMin: number | null;
+  repsMax: number | null;
   targetWeight?: number | null;
   prescriptionKind: PrescriptionKind;
   prescriptionValue?: number | null;
   sets: WorkoutSetLog[];
   source: 'override' | 'template';
 };
+
+/** 1-based program week for a calendar date within a lifting block. */
+export function programWeekIndex(
+  date: string,
+  blockStart: string | null | undefined,
+  weekCount: number,
+): number {
+  const count = Math.max(1, weekCount || 1);
+  if (!blockStart || date < blockStart) return 1;
+  const week = Math.floor(calendarDaysBetween(blockStart, date) / 7) + 1;
+  return Math.min(Math.max(week, 1), count);
+}
+
+export function workoutEntryLabel(
+  entry: { exerciseId?: string | null; bodyPart?: string | null },
+  exerciseNameById?: Map<string, string> | Record<string, { name: string }>,
+): string {
+  if (entry.bodyPart) return entry.bodyPart;
+  if (!entry.exerciseId) return 'Exercise';
+  if (exerciseNameById instanceof Map) {
+    return exerciseNameById.get(entry.exerciseId) ?? 'Exercise';
+  }
+  return exerciseNameById?.[entry.exerciseId]?.name ?? 'Exercise';
+}
 
 export type EffectiveWorkoutSession = {
   id: string;
@@ -81,10 +109,17 @@ export function resolveEffectiveWorkouts(
   daySessions: DayWorkoutSessionLike[],
   dayExercises: DayWorkoutExerciseLike[],
   setLogs: WorkoutSetLog[],
+  block?: { startDate?: string | null; weekCount?: number } | null,
 ): EffectiveWorkouts {
   const activeSessions = daySessions.filter((s) => !s.deletedAt && s.sessionDate === date);
   const activeDayExercises = dayExercises.filter((e) => !e.deletedAt);
   const activeSets = setLogs.filter((s) => !s.deletedAt);
+  const weekCount = Math.max(
+    1,
+    block?.weekCount ??
+      templateExercises.reduce((max, ex) => Math.max(max, ex.weekIndex ?? 1), 1),
+  );
+  const activeWeek = programWeekIndex(date, block?.startDate, weekCount);
 
   if (activeSessions.length > 0) {
     const exercisesBySession = new Map<string, DayWorkoutExerciseLike[]>();
@@ -113,11 +148,13 @@ export function resolveEffectiveWorkouts(
           .sort((a, b) => a.sortIndex - b.sortIndex)
           .map((ex) => ({
             id: ex.id,
-            exerciseId: ex.exerciseId,
+            exerciseId: ex.exerciseId ?? null,
+            bodyPart: ex.bodyPart ?? null,
+            weekIndex: ex.weekIndex ?? 1,
             sortIndex: ex.sortIndex,
-            targetSets: ex.targetSets,
-            repsMin: ex.repsMin,
-            repsMax: ex.repsMax,
+            targetSets: ex.targetSets ?? null,
+            repsMin: ex.repsMin ?? null,
+            repsMax: ex.repsMax ?? null,
             targetWeight: ex.targetWeight ?? null,
             prescriptionKind: ex.prescriptionKind ?? 'none',
             prescriptionValue: ex.prescriptionValue ?? null,
@@ -139,6 +176,10 @@ export function resolveEffectiveWorkouts(
 
   const exercisesByTemplate = new Map<string, WorkoutTemplateExercise[]>();
   for (const ex of templateExercises.filter((e) => !e.deletedAt)) {
+    const week = ex.weekIndex ?? 1;
+    // Multi-week boards only surface the active program week; legacy single-week
+    // rows (all weekIndex 1) still appear every week.
+    if (weekCount > 1 && week !== activeWeek) continue;
     const list = exercisesByTemplate.get(ex.templateId) ?? [];
     list.push(ex);
     exercisesByTemplate.set(ex.templateId, list);
@@ -154,11 +195,13 @@ export function resolveEffectiveWorkouts(
       .sort((a, b) => a.sortIndex - b.sortIndex)
       .map((ex) => ({
         id: ex.id,
-        exerciseId: ex.exerciseId,
+        exerciseId: ex.exerciseId ?? null,
+        bodyPart: ex.bodyPart ?? null,
+        weekIndex: ex.weekIndex ?? 1,
         sortIndex: ex.sortIndex,
-        targetSets: ex.targetSets,
-        repsMin: ex.repsMin,
-        repsMax: ex.repsMax,
+        targetSets: ex.targetSets ?? null,
+        repsMin: ex.repsMin ?? null,
+        repsMax: ex.repsMax ?? null,
         targetWeight: ex.targetWeight ?? null,
         prescriptionKind: ex.prescriptionKind ?? 'none',
         prescriptionValue: ex.prescriptionValue ?? null,
@@ -183,17 +226,30 @@ export function formatPrescription(
 }
 
 export function formatExercisePrescriptionSummary(input: {
-  targetSets: number;
-  repsMin: number;
-  repsMax: number;
+  targetSets?: number | null;
+  repsMin?: number | null;
+  repsMax?: number | null;
   targetWeight?: number | null;
   prescriptionKind?: PrescriptionKind | null;
   prescriptionValue?: number | null;
   weightUnit?: WeightUnit;
 }): string {
-  const reps =
-    input.repsMax !== input.repsMin ? `${input.repsMin}–${input.repsMax}` : String(input.repsMin);
-  const parts = [`${input.targetSets} × ${reps}`];
+  const parts: string[] = [];
+  if (input.targetSets != null && input.repsMin != null && input.repsMax != null) {
+    const reps =
+      input.repsMax !== input.repsMin
+        ? `${input.repsMin}–${input.repsMax}`
+        : String(input.repsMin);
+    parts.push(`${input.targetSets} × ${reps}`);
+  } else if (input.targetSets != null) {
+    parts.push(`${input.targetSets} sets`);
+  } else if (input.repsMin != null && input.repsMax != null) {
+    const reps =
+      input.repsMax !== input.repsMin
+        ? `${input.repsMin}–${input.repsMax}`
+        : String(input.repsMin);
+    parts.push(`${reps} reps`);
+  }
   if (input.targetWeight != null) {
     parts.push(`@ ${input.targetWeight}${input.weightUnit ? ` ${input.weightUnit}` : ''}`);
   }

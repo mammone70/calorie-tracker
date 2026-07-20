@@ -23,6 +23,24 @@ export const DEFAULT_WEIGHT_UNIT: WeightUnit = 'lbs';
 export const PRESCRIPTION_KINDS = ['none', 'rpe', 'rir', 'load_increase'] as const;
 export type PrescriptionKind = (typeof PRESCRIPTION_KINDS)[number];
 
+/** Placeholder body-part slots for workout templates / day entries. */
+export const BODY_PARTS = [
+  'Chest',
+  'Back',
+  'Shoulders',
+  'Arms',
+  'Biceps',
+  'Triceps',
+  'Quads',
+  'Hamstrings',
+  'Glutes',
+  'Calves',
+  'Core',
+  'Full Body',
+  'Cardio',
+] as const;
+export type BodyPart = (typeof BODY_PARTS)[number];
+
 export const SYNC_ENTITY_TYPES = [
   'macro_targets',
   'weekly_macro_targets',

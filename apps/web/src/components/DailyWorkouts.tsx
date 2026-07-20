@@ -8,8 +8,11 @@ import { ExercisePicker } from './ExercisePicker';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/client';
 import {
+  BODY_PARTS,
   DEFAULT_WEIGHT_UNIT,
   formatExercisePrescriptionSummary,
+  workoutEntryLabel,
+  type BodyPart,
   type EffectiveWorkouts,
   type EffectiveWorkoutExercise,
   type Exercise,
@@ -17,6 +20,13 @@ import {
   type WorkoutSetLog,
 } from '@calorie-tracker/shared';
 import { cn, inputFieldClass } from '@/lib/utils';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 type DailyWorkoutsProps = {
   date: string;
@@ -41,7 +51,9 @@ export function DailyWorkouts({ date }: DailyWorkoutsProps) {
     Record<string, { reps: string; weight: string }>
   >({});
   const [addSessionId, setAddSessionId] = useState<string | null>(null);
+  const [addEntryKind, setAddEntryKind] = useState<'exercise' | 'bodyPart'>('exercise');
   const [newExerciseId, setNewExerciseId] = useState('');
+  const [newBodyPart, setNewBodyPart] = useState<BodyPart | ''>('');
   const [error, setError] = useState('');
 
   const exercisesQuery = useQuery({
@@ -58,7 +70,7 @@ export function DailyWorkouts({ date }: DailyWorkoutsProps) {
   });
 
   const exerciseMap = useMemo(
-    () => new Map((exercisesQuery.data ?? []).map((ex) => [ex.id, ex])),
+    () => new Map((exercisesQuery.data ?? []).map((ex) => [ex.id, ex.name])),
     [exercisesQuery.data],
   );
 
@@ -135,7 +147,8 @@ export function DailyWorkouts({ date }: DailyWorkoutsProps) {
     name: string;
     sourceTemplateId?: string | null;
   }) => {
-    if (!newExerciseId) return;
+    if (addEntryKind === 'exercise' && !newExerciseId) return;
+    if (addEntryKind === 'bodyPart' && !newBodyPart) return;
     setError('');
     try {
       const effective = (await api.materializeWorkouts(date)) as EffectiveWorkouts;
@@ -148,13 +161,15 @@ export function DailyWorkouts({ date }: DailyWorkoutsProps) {
         ) ?? effective.sessions[0];
       if (!daySession) throw new Error('No workout session for this day');
       await api.addDayWorkoutExercise(daySession.id, {
-        exerciseId: newExerciseId,
+        exerciseId: addEntryKind === 'exercise' ? newExerciseId : null,
+        bodyPart: addEntryKind === 'bodyPart' ? (newBodyPart as BodyPart) : null,
         targetSets: 3,
         repsMin: 8,
         repsMax: 12,
         sortIndex: 99,
       });
       setNewExerciseId('');
+      setNewBodyPart('');
       setAddSessionId(null);
       await refresh();
     } catch (err) {
@@ -185,7 +200,7 @@ export function DailyWorkouts({ date }: DailyWorkoutsProps) {
           <CardContent className="space-y-2">
             {session.exercises.map((ex) => {
               const open = expanded[ex.id] ?? false;
-              const name = exerciseMap.get(ex.exerciseId)?.name ?? 'Exercise';
+              const name = workoutEntryLabel(ex, exerciseMap);
               const confirmed = ex.sets.filter((s) => s.status === 'confirmed').length;
               const summary = formatExercisePrescriptionSummary({
                 targetSets: ex.targetSets,
@@ -206,11 +221,13 @@ export function DailyWorkouts({ date }: DailyWorkoutsProps) {
                     <span className="min-w-0">
                       <span className="font-medium">{name}</span>{' '}
                       <span className="text-xs font-normal text-muted-foreground">
-                        {confirmed}/{ex.sets.length || ex.targetSets} sets
+                        {confirmed}/{ex.sets.length || ex.targetSets || 0} sets
                       </span>
-                      <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-                        {summary}
-                      </span>
+                      {summary ? (
+                        <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                          {summary}
+                        </span>
+                      ) : null}
                     </span>
                     <ChevronDown
                       className={cn('size-4 shrink-0 transition-transform', open && 'rotate-180')}
@@ -330,16 +347,56 @@ export function DailyWorkouts({ date }: DailyWorkoutsProps) {
 
             {addSessionId === session.id ? (
               <div className="space-y-2 pt-2">
-                <ExercisePicker
-                  exercises={exercisesQuery.data ?? []}
-                  value={newExerciseId}
-                  onChange={setNewExerciseId}
-                />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={addEntryKind === 'exercise' ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setAddEntryKind('exercise')}
+                  >
+                    Exercise
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={addEntryKind === 'bodyPart' ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setAddEntryKind('bodyPart')}
+                  >
+                    Body part
+                  </Button>
+                </div>
+                {addEntryKind === 'exercise' ? (
+                  <ExercisePicker
+                    exercises={exercisesQuery.data ?? []}
+                    value={newExerciseId}
+                    onChange={setNewExerciseId}
+                  />
+                ) : (
+                  <Select
+                    value={newBodyPart || undefined}
+                    onValueChange={(value) => setNewBodyPart(value as BodyPart)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose body part…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BODY_PARTS.map((part) => (
+                        <SelectItem key={part} value={part}>
+                          {part}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 <div className="flex gap-2">
                   <Button
                     className="flex-1"
                     size="sm"
-                    disabled={!newExerciseId}
+                    disabled={
+                      addEntryKind === 'exercise' ? !newExerciseId : !newBodyPart
+                    }
                     onClick={() => void addExercise(session)}
                   >
                     Add

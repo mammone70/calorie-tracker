@@ -13,6 +13,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [trustedDevice, setTrustedDevice] = useState(true);
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -23,7 +24,7 @@ export function LoginPage() {
     }
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email, password, trustedDevice);
       navigate('/');
     } catch (err) {
       showErrorFromUnknown(err, 'Sign in failed. Please try again.');
@@ -67,6 +68,16 @@ export function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
+
+            <label className="flex items-start gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={trustedDevice}
+                onChange={(e) => setTrustedDevice(e.target.checked)}
+              />
+              <span>Trust this device — stay signed in longer on devices you own</span>
+            </label>
 
             <Button type="submit" className="w-full" size="lg" disabled={loading}>
               {loading ? 'Signing in…' : 'Sign In'}

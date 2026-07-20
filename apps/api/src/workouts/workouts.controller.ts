@@ -19,11 +19,13 @@ import {
   effectiveWorkoutsQuerySchema,
   forUserIdQuerySchema,
   materializeWorkoutsSchema,
+  updateWorkoutBlockSchema,
   updateWorkoutSetLogSchema,
   type AddWorkoutSetInput,
   type ConfirmWorkoutSetInput,
   type CreateDayWorkoutExerciseInput,
   type CreateDayWorkoutSessionInput,
+  type UpdateWorkoutBlockInput,
   type UpdateWorkoutSetLogInput,
 } from '@calorie-tracker/shared';
 import type { DbClient } from '@calorie-tracker/db';
@@ -40,6 +42,34 @@ export class WorkoutsController {
     @Inject(DB) private readonly db: DbClient,
     private readonly workoutsService: WorkoutsService,
   ) {}
+
+  @Get('block')
+  async getBlock(
+    @Req() req: { user: AuthUser },
+    @Query(zodPipe(forUserIdQuerySchema)) query: { forUserId?: string },
+  ) {
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    return this.workoutsService.getWorkoutBlock(userId);
+  }
+
+  @Patch('block')
+  async updateBlock(
+    @Req() req: { user: AuthUser },
+    @Query(zodPipe(forUserIdQuerySchema)) query: { forUserId?: string },
+    @Body(zodPipe(updateWorkoutBlockSchema)) body: UpdateWorkoutBlockInput,
+  ) {
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    return this.workoutsService.updateWorkoutBlock(userId, body);
+  }
+
+  @Post('ensure-board')
+  async ensureBoard(
+    @Req() req: { user: AuthUser },
+    @Query(zodPipe(forUserIdQuerySchema)) query: { forUserId?: string },
+  ) {
+    const userId = await resolveActingUserId(this.db, req.user, query.forUserId);
+    return this.workoutsService.ensureWeekdayBoard(userId);
+  }
 
   @Get('effective')
   async effective(

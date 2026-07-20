@@ -9,6 +9,7 @@ import {
   dayWorkoutExercises,
   dayWorkoutSessions,
   dailyWorkoutMaterializations,
+  workoutBlocks,
   workoutSetLogs,
   workoutTemplateExercises,
   workoutTemplates,
@@ -16,12 +17,14 @@ import {
 } from '@calorie-tracker/db';
 import {
   resolveEffectiveWorkouts,
+  WEEKDAYS,
   type AddWorkoutSetInput,
   type ConfirmWorkoutSetInput,
   type CreateDayWorkoutExerciseInput,
   type CreateDayWorkoutSessionInput,
   type CreateWorkoutTemplateExerciseInput,
   type CreateWorkoutTemplateInput,
+  type UpdateWorkoutBlockInput,
   type UpdateWorkoutSetLogInput,
   type UpdateWorkoutTemplateExerciseInput,
   type UpdateWorkoutTemplateInput,
@@ -30,6 +33,7 @@ import { DB } from '../database/database.module';
 import {
   serializeDayWorkoutExercise,
   serializeDayWorkoutSession,
+  serializeWorkoutBlock,
   serializeWorkoutSetLog,
   serializeWorkoutTemplate,
   serializeWorkoutTemplateExercise,
@@ -116,7 +120,88 @@ export class WorkoutsService {
         isNull(workoutTemplateExercises.deletedAt),
       ),
     });
-    return rows.map(serializeWorkoutTemplateExercise).sort((a, b) => a.sortIndex - b.sortIndex);
+    return rows
+      .map(serializeWorkoutTemplateExercise)
+      .sort((a, b) => a.weekIndex - b.weekIndex || a.sortIndex - b.sortIndex);
+  }
+
+  async listAllTemplateExercises(userId: string) {
+    const rows = await this.db.query.workoutTemplateExercises.findMany({
+      where: and(
+        eq(workoutTemplateExercises.userId, userId),
+        isNull(workoutTemplateExercises.deletedAt),
+      ),
+    });
+    return rows
+      .map(serializeWorkoutTemplateExercise)
+      .sort((a, b) => a.weekIndex - b.weekIndex || a.sortIndex - b.sortIndex);
+  }
+
+  async getWorkoutBlock(userId: string) {
+    const existing = await this.db.query.workoutBlocks.findFirst({
+      where: eq(workoutBlocks.userId, userId),
+    });
+    if (existing) return serializeWorkoutBlock(existing);
+    return {
+      userId,
+      startDate: null,
+      weekCount: 3,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  async updateWorkoutBlock(userId: string, input: UpdateWorkoutBlockInput) {
+    const existing = await this.db.query.workoutBlocks.findFirst({
+      where: eq(workoutBlocks.userId, userId),
+    });
+    if (existing) {
+      const [row] = await this.db
+        .update(workoutBlocks)
+        .set({
+          ...(input.startDate !== undefined && { startDate: input.startDate }),
+          ...(input.weekCount !== undefined && { weekCount: input.weekCount }),
+          updatedAt: new Date(),
+        })
+        .where(eq(workoutBlocks.userId, userId))
+        .returning();
+      return serializeWorkoutBlock(row);
+    }
+    const [row] = await this.db
+      .insert(workoutBlocks)
+      .values({
+        userId,
+        startDate: input.startDate ?? null,
+        weekCount: input.weekCount ?? 3,
+      })
+      .returning();
+    return serializeWorkoutBlock(row);
+  }
+
+  /** Ensure one weekday template exists for each Mon–Sun column on the board. */
+  async ensureWeekdayBoard(userId: string) {
+    const existing = await this.listTemplates(userId);
+    const byDay = new Map<number, (typeof existing)[number]>();
+    for (const template of existing) {
+      if (template.scheduleKind !== 'weekday' || template.dayOfWeek == null) continue;
+      if (!byDay.has(template.dayOfWeek)) byDay.set(template.dayOfWeek, template);
+    }
+    const created = [];
+    for (let dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
+      if (byDay.has(dayOfWeek)) continue;
+      const template = await this.createTemplate(userId, {
+        name: dayOfWeek === 6 ? 'Rest' : WEEKDAYS[dayOfWeek],
+        scheduleKind: 'weekday',
+        dayOfWeek,
+        sortIndex: dayOfWeek,
+        isActive: true,
+      });
+      created.push(template);
+      byDay.set(dayOfWeek, template);
+    }
+    return {
+      templates: WEEKDAYS.map((_, dayOfWeek) => byDay.get(dayOfWeek)!),
+      created,
+    };
   }
 
   async addTemplateExercise(
@@ -130,11 +215,13 @@ export class WorkoutsService {
       .values({
         userId,
         templateId,
-        exerciseId: input.exerciseId,
+        exerciseId: input.exerciseId ?? null,
+        bodyPart: input.bodyPart ?? null,
+        weekIndex: input.weekIndex ?? 1,
         sortIndex: input.sortIndex ?? 0,
-        targetSets: input.targetSets,
-        repsMin: input.repsMin,
-        repsMax: input.repsMax,
+        targetSets: input.targetSets ?? null,
+        repsMin: input.repsMin ?? null,
+        repsMax: input.repsMax ?? null,
         targetWeight: input.targetWeight != null ? String(input.targetWeight) : null,
         prescriptionKind: input.prescriptionKind ?? 'none',
         prescriptionValue:
@@ -158,10 +245,25 @@ export class WorkoutsService {
     });
     if (!existing) throw new NotFoundException('Template exercise not found');
 
+    const entryPatch: {
+      exerciseId?: string | null;
+      bodyPart?: string | null;
+    } = {};
+    if (input.exerciseId !== undefined || input.bodyPart !== undefined) {
+      if (input.exerciseId) {
+        entryPatch.exerciseId = input.exerciseId;
+        entryPatch.bodyPart = null;
+      } else if (input.bodyPart) {
+        entryPatch.exerciseId = null;
+        entryPatch.bodyPart = input.bodyPart;
+      }
+    }
+
     const [row] = await this.db
       .update(workoutTemplateExercises)
       .set({
-        ...(input.exerciseId !== undefined && { exerciseId: input.exerciseId }),
+        ...entryPatch,
+        ...(input.weekIndex !== undefined && { weekIndex: input.weekIndex }),
         ...(input.sortIndex !== undefined && { sortIndex: input.sortIndex }),
         ...(input.targetSets !== undefined && { targetSets: input.targetSets }),
         ...(input.repsMin !== undefined && { repsMin: input.repsMin }),
@@ -199,7 +301,7 @@ export class WorkoutsService {
   // --- Effective + materialize ---
 
   private async loadPlanRows(userId: string, date: string) {
-    const [templates, templateExercises, sessions, dayExercises, sets] = await Promise.all([
+    const [templates, templateExercises, sessions, dayExercises, sets, block] = await Promise.all([
       this.db.query.workoutTemplates.findMany({
         where: and(eq(workoutTemplates.userId, userId), isNull(workoutTemplates.deletedAt)),
       }),
@@ -222,6 +324,7 @@ export class WorkoutsService {
       this.db.query.workoutSetLogs.findMany({
         where: and(eq(workoutSetLogs.userId, userId), isNull(workoutSetLogs.deletedAt)),
       }),
+      this.getWorkoutBlock(userId),
     ]);
 
     return {
@@ -230,6 +333,7 @@ export class WorkoutsService {
       sessions: sessions.map(serializeDayWorkoutSession),
       dayExercises: dayExercises.map(serializeDayWorkoutExercise),
       sets: sets.map(serializeWorkoutSetLog),
+      block,
     };
   }
 
@@ -242,6 +346,7 @@ export class WorkoutsService {
       rows.sessions,
       rows.dayExercises,
       rows.sets,
+      rows.block,
     );
   }
 
@@ -275,11 +380,13 @@ export class WorkoutsService {
               .values({
                 userId,
                 sessionId: daySession.id,
-                exerciseId: ex.exerciseId,
+                exerciseId: ex.exerciseId ?? null,
+                bodyPart: ex.bodyPart ?? null,
+                weekIndex: ex.weekIndex ?? 1,
                 sortIndex: ex.sortIndex,
-                targetSets: ex.targetSets,
-                repsMin: ex.repsMin,
-                repsMax: ex.repsMax,
+                targetSets: ex.targetSets ?? null,
+                repsMin: ex.repsMin ?? null,
+                repsMax: ex.repsMax ?? null,
                 targetWeight: ex.targetWeight != null ? String(ex.targetWeight) : null,
                 prescriptionKind: ex.prescriptionKind ?? 'none',
                 prescriptionValue:
@@ -287,14 +394,15 @@ export class WorkoutsService {
               })
               .returning();
 
-            for (let i = 0; i < ex.targetSets; i++) {
+            const setCount = ex.targetSets ?? 0;
+            for (let i = 0; i < setCount; i++) {
               await this.db.insert(workoutSetLogs).values({
                 userId,
                 dayExerciseId: dayEx.id,
                 setIndex: i,
                 status: 'pending',
-                targetRepsMin: ex.repsMin,
-                targetRepsMax: ex.repsMax,
+                targetRepsMin: ex.repsMin ?? 0,
+                targetRepsMax: ex.repsMax ?? ex.repsMin ?? 0,
                 targetWeight: ex.targetWeight != null ? String(ex.targetWeight) : null,
               });
             }
@@ -319,14 +427,15 @@ export class WorkoutsService {
           ),
         });
         if (existingSets.length === 0) {
-          for (let i = 0; i < ex.targetSets; i++) {
+          const setCount = ex.targetSets ?? 0;
+          for (let i = 0; i < setCount; i++) {
             await this.db.insert(workoutSetLogs).values({
               userId,
               dayExerciseId: ex.id,
               setIndex: i,
               status: 'pending',
-              targetRepsMin: ex.repsMin,
-              targetRepsMax: ex.repsMax,
+              targetRepsMin: ex.repsMin ?? 0,
+              targetRepsMax: ex.repsMax ?? ex.repsMin ?? 0,
               targetWeight: ex.targetWeight != null ? String(ex.targetWeight) : null,
             });
           }
@@ -458,11 +567,13 @@ export class WorkoutsService {
       .values({
         userId,
         sessionId,
-        exerciseId: input.exerciseId,
+        exerciseId: input.exerciseId ?? null,
+        bodyPart: input.bodyPart ?? null,
+        weekIndex: input.weekIndex ?? 1,
         sortIndex: input.sortIndex ?? 0,
-        targetSets: input.targetSets,
-        repsMin: input.repsMin,
-        repsMax: input.repsMax,
+        targetSets: input.targetSets ?? null,
+        repsMin: input.repsMin ?? null,
+        repsMax: input.repsMax ?? null,
         targetWeight: input.targetWeight != null ? String(input.targetWeight) : null,
         prescriptionKind: input.prescriptionKind ?? 'none',
         prescriptionValue:
@@ -470,14 +581,15 @@ export class WorkoutsService {
       })
       .returning();
 
-    for (let i = 0; i < input.targetSets; i++) {
+    const setCount = input.targetSets ?? 0;
+    for (let i = 0; i < setCount; i++) {
       await this.db.insert(workoutSetLogs).values({
         userId,
         dayExerciseId: dayEx.id,
         setIndex: i,
         status: 'pending',
-        targetRepsMin: input.repsMin,
-        targetRepsMax: input.repsMax,
+        targetRepsMin: input.repsMin ?? 0,
+        targetRepsMax: input.repsMax ?? input.repsMin ?? 0,
         targetWeight: input.targetWeight != null ? String(input.targetWeight) : null,
       });
     }
@@ -524,8 +636,8 @@ export class WorkoutsService {
       ),
     });
     const nextIndex = existing.reduce((max, s) => Math.max(max, s.setIndex), -1) + 1;
-    const repsMin = input.targetRepsMin ?? ex.repsMin;
-    const repsMax = input.targetRepsMax ?? ex.repsMax;
+    const repsMin = input.targetRepsMin ?? ex.repsMin ?? 0;
+    const repsMax = input.targetRepsMax ?? ex.repsMax ?? repsMin;
     const weight =
       input.targetWeight !== undefined
         ? input.targetWeight

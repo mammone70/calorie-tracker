@@ -16,6 +16,27 @@ import { getJwtAccessSecret, getJwtRefreshSecret } from '../config/env.validatio
 import { toIso } from '../common/serializers';
 import { InvitationsService } from '../invitations/invitations.service';
 
+type IssueTokenOptions = {
+  trusted?: boolean;
+};
+
+/** Parse durations like 15m, 1h, 30d into a future Date. */
+export function expiresAtFromDuration(duration: string, from = new Date()): Date {
+  const match = /^(\d+)\s*([smhd])$/i.exec(duration.trim());
+  const result = new Date(from);
+  if (!match) {
+    result.setDate(result.getDate() + 30);
+    return result;
+  }
+  const amount = Number(match[1]);
+  const unit = match[2].toLowerCase();
+  if (unit === 's') result.setSeconds(result.getSeconds() + amount);
+  else if (unit === 'm') result.setMinutes(result.getMinutes() + amount);
+  else if (unit === 'h') result.setHours(result.getHours() + amount);
+  else result.setDate(result.getDate() + amount);
+  return result;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -24,6 +45,20 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly invitationsService: InvitationsService,
   ) {}
+
+  private accessExpiresIn(trusted: boolean) {
+    if (trusted) {
+      return this.config.get<string>('JWT_TRUSTED_ACCESS_EXPIRES_IN') ?? '1h';
+    }
+    return this.config.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '15m';
+  }
+
+  private refreshExpiresIn(trusted: boolean) {
+    if (trusted) {
+      return this.config.get<string>('JWT_TRUSTED_REFRESH_EXPIRES_IN') ?? '90d';
+    }
+    return this.config.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '30d';
+  }
 
   async register(input: RegisterInput, allowWithoutInvite = false) {
     if (input.inviteToken) {
@@ -49,7 +84,7 @@ export class AuthService {
       })
       .returning();
 
-    const tokens = await this.issueTokens(user);
+    const tokens = await this.issueTokens(user, { trusted: input.trustedDevice !== false });
     return {
       user: this.serializeUser(user),
       ...tokens,
@@ -69,7 +104,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const tokens = await this.issueTokens(user);
+    const tokens = await this.issueTokens(user, { trusted: input.trustedDevice !== false });
     return {
       user: this.serializeUser(user),
       ...tokens,
@@ -102,7 +137,7 @@ export class AuthService {
     }
 
     await this.db.delete(refreshTokens).where(eq(refreshTokens.id, stored.id));
-    return this.issueTokens(user);
+    return this.issueTokens(user, { trusted: stored.trusted });
   }
 
   async getMe(userId: string) {
@@ -159,25 +194,27 @@ export class AuthService {
     return this.serializeUser(row);
   }
 
-  private async issueTokens(user: User) {
+  private async issueTokens(user: User, options: IssueTokenOptions = {}) {
+    const trusted = options.trusted === true;
+    const accessExpiresIn = this.accessExpiresIn(trusted);
+    const refreshExpiresIn = this.refreshExpiresIn(trusted);
+
     const payload = { sub: user.id, email: user.email, role: user.role };
     const accessToken = await this.jwt.signAsync(payload, {
       secret: getJwtAccessSecret(),
-      expiresIn: this.config.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '15m',
+      expiresIn: accessExpiresIn,
     });
 
     const refreshToken = await this.jwt.signAsync(payload, {
       secret: getJwtRefreshSecret(),
-      expiresIn: this.config.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '30d',
+      expiresIn: refreshExpiresIn,
     });
-
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
 
     await this.db.insert(refreshTokens).values({
       userId: user.id,
       tokenHash: this.hashToken(refreshToken),
-      expiresAt,
+      trusted,
+      expiresAt: expiresAtFromDuration(refreshExpiresIn),
     });
 
     return { accessToken, refreshToken };

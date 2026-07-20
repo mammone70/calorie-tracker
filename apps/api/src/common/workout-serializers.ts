@@ -43,17 +43,33 @@ export function serializeWorkoutTemplateExercise(row: WorkoutTemplateExerciseRow
     id: row.id,
     userId: row.userId,
     templateId: row.templateId,
-    exerciseId: row.exerciseId,
+    exerciseId: row.exerciseId ?? null,
+    bodyPart: row.bodyPart ?? null,
+    weekIndex: row.weekIndex ?? 1,
     sortIndex: row.sortIndex,
-    targetSets: row.targetSets,
-    repsMin: row.repsMin,
-    repsMax: row.repsMax,
+    targetSets: row.targetSets ?? null,
+    repsMin: row.repsMin ?? null,
+    repsMax: row.repsMax ?? null,
     targetWeight: row.targetWeight != null ? Number(row.targetWeight) : null,
     prescriptionKind: row.prescriptionKind,
     prescriptionValue: row.prescriptionValue != null ? Number(row.prescriptionValue) : null,
     createdAt: toIso(row.createdAt)!,
     updatedAt: toIso(row.updatedAt)!,
     deletedAt: toIso(row.deletedAt),
+  };
+}
+
+export function serializeWorkoutBlock(row: {
+  userId: string;
+  startDate: string | Date | null;
+  weekCount: number;
+  updatedAt: Date;
+}) {
+  return {
+    userId: row.userId,
+    startDate: row.startDate ? toDateString(row.startDate) : null,
+    weekCount: row.weekCount,
+    updatedAt: toIso(row.updatedAt)!,
   };
 }
 
@@ -76,11 +92,13 @@ export function serializeDayWorkoutExercise(row: DayWorkoutExerciseRow) {
     id: row.id,
     userId: row.userId,
     sessionId: row.sessionId,
-    exerciseId: row.exerciseId,
+    exerciseId: row.exerciseId ?? null,
+    bodyPart: row.bodyPart ?? null,
+    weekIndex: row.weekIndex ?? 1,
     sortIndex: row.sortIndex,
-    targetSets: row.targetSets,
-    repsMin: row.repsMin,
-    repsMax: row.repsMax,
+    targetSets: row.targetSets ?? null,
+    repsMin: row.repsMin ?? null,
+    repsMax: row.repsMax ?? null,
     targetWeight: row.targetWeight != null ? Number(row.targetWeight) : null,
     prescriptionKind: row.prescriptionKind,
     prescriptionValue: row.prescriptionValue != null ? Number(row.prescriptionValue) : null,

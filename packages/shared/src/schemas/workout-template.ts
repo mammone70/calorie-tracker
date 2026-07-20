@@ -1,8 +1,26 @@
 import { z } from 'zod';
-import { PRESCRIPTION_KINDS, WORKOUT_SCHEDULE_KINDS, type PrescriptionKind } from '../constants';
+import {
+  BODY_PARTS,
+  PRESCRIPTION_KINDS,
+  WORKOUT_SCHEDULE_KINDS,
+  type PrescriptionKind,
+} from '../constants';
 
-const repsRangeRefine = (data: { repsMin: number; repsMax: number }, ctx: z.RefinementCtx) => {
-  if (data.repsMax < data.repsMin) {
+const repsRangeRefine = (
+  data: { repsMin?: number | null; repsMax?: number | null },
+  ctx: z.RefinementCtx,
+) => {
+  const hasMin = data.repsMin != null;
+  const hasMax = data.repsMax != null;
+  if (hasMin !== hasMax) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Provide both repsMin and repsMax, or neither',
+      path: hasMin ? ['repsMax'] : ['repsMin'],
+    });
+    return;
+  }
+  if (hasMin && hasMax && (data.repsMax as number) < (data.repsMin as number)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: 'repsMax must be >= repsMin',
@@ -59,6 +77,23 @@ export function refinePrescription(
       code: z.ZodIssueCode.custom,
       message: 'Load increase must be greater than 0',
       path: ['prescriptionValue'],
+    });
+  }
+}
+
+const bodyPartSchema = z.enum(BODY_PARTS);
+
+export function refineWorkoutEntryTarget(
+  data: { exerciseId?: string | null; bodyPart?: string | null },
+  ctx: z.RefinementCtx,
+) {
+  const hasExercise = data.exerciseId != null && data.exerciseId !== '';
+  const hasBodyPart = data.bodyPart != null && data.bodyPart !== '';
+  if (hasExercise === hasBodyPart) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Provide either an exercise or a body part (not both)',
+      path: hasExercise ? ['bodyPart'] : ['exerciseId'],
     });
   }
 }
@@ -122,40 +157,59 @@ export const workoutTemplateSchema = z.object({
 
 export const createWorkoutTemplateExerciseSchema = z
   .object({
-    exerciseId: z.string().uuid(),
+    exerciseId: z.string().uuid().nullable().optional(),
+    bodyPart: bodyPartSchema.nullable().optional(),
+    weekIndex: z.number().int().min(1).max(52).default(1),
     sortIndex: z.number().int().min(0).default(0),
-    targetSets: z.number().int().min(1).max(50),
-    repsMin: z.number().int().min(0).max(999),
-    repsMax: z.number().int().min(0).max(999),
+    targetSets: z.number().int().min(1).max(50).nullable().optional(),
+    repsMin: z.number().int().min(0).max(999).nullable().optional(),
+    repsMax: z.number().int().min(0).max(999).nullable().optional(),
     targetWeight: z.number().nonnegative().nullable().optional(),
     prescriptionKind: z.enum(PRESCRIPTION_KINDS).default('none'),
     prescriptionValue: z.number().nonnegative().nullable().optional(),
   })
   .superRefine(repsRangeRefine)
-  .superRefine(refinePrescription);
+  .superRefine(refinePrescription)
+  .superRefine(refineWorkoutEntryTarget);
 
 export const updateWorkoutTemplateExerciseSchema = z
   .object({
-    exerciseId: z.string().uuid().optional(),
+    exerciseId: z.string().uuid().nullable().optional(),
+    bodyPart: bodyPartSchema.nullable().optional(),
+    weekIndex: z.number().int().min(1).max(52).optional(),
     sortIndex: z.number().int().min(0).optional(),
-    targetSets: z.number().int().min(1).max(50).optional(),
-    repsMin: z.number().int().min(0).max(999).optional(),
-    repsMax: z.number().int().min(0).max(999).optional(),
+    targetSets: z.number().int().min(1).max(50).nullable().optional(),
+    repsMin: z.number().int().min(0).max(999).nullable().optional(),
+    repsMax: z.number().int().min(0).max(999).nullable().optional(),
     targetWeight: z.number().nonnegative().nullable().optional(),
     prescriptionKind: z.enum(PRESCRIPTION_KINDS).optional(),
     prescriptionValue: z.number().nonnegative().nullable().optional(),
   })
-  .superRefine(refinePrescription);
+  .superRefine(repsRangeRefine)
+  .superRefine(refinePrescription)
+  .superRefine((data, ctx) => {
+    // Only validate entry target when the client is changing it.
+    if (data.exerciseId === undefined && data.bodyPart === undefined) return;
+    refineWorkoutEntryTarget(
+      {
+        exerciseId: data.exerciseId ?? null,
+        bodyPart: data.bodyPart ?? null,
+      },
+      ctx,
+    );
+  });
 
 export const workoutTemplateExerciseSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
   templateId: z.string().uuid(),
-  exerciseId: z.string().uuid(),
+  exerciseId: z.string().uuid().nullable(),
+  bodyPart: z.string().nullable(),
+  weekIndex: z.number().int(),
   sortIndex: z.number().int(),
-  targetSets: z.number().int(),
-  repsMin: z.number().int(),
-  repsMax: z.number().int(),
+  targetSets: z.number().int().nullable(),
+  repsMin: z.number().int().nullable(),
+  repsMax: z.number().int().nullable(),
   targetWeight: z.number().nullable().optional(),
   prescriptionKind: z.enum(PRESCRIPTION_KINDS),
   prescriptionValue: z.number().nullable().optional(),
@@ -164,9 +218,23 @@ export const workoutTemplateExerciseSchema = z.object({
   deletedAt: z.string().datetime().nullable().optional(),
 });
 
+export const workoutBlockSchema = z.object({
+  userId: z.string().uuid(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  weekCount: z.number().int().min(1).max(52),
+  updatedAt: z.string().datetime(),
+});
+
+export const updateWorkoutBlockSchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  weekCount: z.number().int().min(1).max(52).optional(),
+});
+
 export type CreateWorkoutTemplateInput = z.infer<typeof createWorkoutTemplateSchema>;
 export type UpdateWorkoutTemplateInput = z.infer<typeof updateWorkoutTemplateSchema>;
 export type WorkoutTemplate = z.infer<typeof workoutTemplateSchema>;
 export type CreateWorkoutTemplateExerciseInput = z.infer<typeof createWorkoutTemplateExerciseSchema>;
 export type UpdateWorkoutTemplateExerciseInput = z.infer<typeof updateWorkoutTemplateExerciseSchema>;
 export type WorkoutTemplateExercise = z.infer<typeof workoutTemplateExerciseSchema>;
+export type WorkoutBlock = z.infer<typeof workoutBlockSchema>;
+export type UpdateWorkoutBlockInput = z.infer<typeof updateWorkoutBlockSchema>;

@@ -8,11 +8,13 @@ export const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   inviteToken: z.string().min(1).optional(),
+  trustedDevice: z.boolean().optional().default(true),
 });
 
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  trustedDevice: z.boolean().optional().default(true),
 });
 
 export const refreshSchema = z.object({

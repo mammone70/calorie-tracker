@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 /**
- * Export all app data for one user (foods, plans, logs, targets).
+ * Export all app data for one user (foods, plans, logs, targets, workouts).
  *
  * Usage:
  *   node scripts/export-user-data.js mammone@gmail.com [output.json]
+ *
+ * Exercises include the user's personal rows plus all global exercises
+ * (so workout templates keep valid exercise_id foreign keys).
  */
 const fs = require('fs');
 const path = require('path');
 const { createSql } = require('./lib/db-env');
 
+/** Tables keyed only by user_id (simple SELECT … WHERE user_id = $1). */
 const USER_TABLES = [
   'foods',
   'weekly_meals',
@@ -19,6 +23,12 @@ const USER_TABLES = [
   'meal_plan_entries',
   'daily_log_materializations',
   'food_log_entries',
+  'workout_templates',
+  'workout_template_exercises',
+  'day_workout_sessions',
+  'day_workout_exercises',
+  'workout_set_logs',
+  'daily_workout_materializations',
 ];
 
 async function main() {
@@ -50,12 +60,24 @@ async function main() {
 
     const user = users[0];
     const data = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       email: user.email,
       sourceUserId: user.id,
       tables: {},
     };
+
+    const exercises = await sql`
+      SELECT *
+      FROM exercises
+      WHERE user_id = ${user.id}
+         OR is_global = true
+      ORDER BY created_at
+    `;
+    data.tables.exercises = exercises;
+    console.error(
+      `Exported ${exercises.length} rows from exercises (personal + global catalog)`,
+    );
 
     for (const table of USER_TABLES) {
       const rows = await sql.unsafe(

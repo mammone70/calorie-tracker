@@ -72,6 +72,7 @@ export const refreshTokens = pgTable('refresh_tokens', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   tokenHash: text('token_hash').notNull(),
+  trusted: boolean('trusted').notNull().default(false),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -298,19 +299,28 @@ export const workoutTemplateExercises = pgTable('workout_template_exercises', {
   templateId: uuid('template_id')
     .notNull()
     .references(() => workoutTemplates.id, { onDelete: 'cascade' }),
-  exerciseId: uuid('exercise_id')
-    .notNull()
-    .references(() => exercises.id, { onDelete: 'cascade' }),
+  exerciseId: uuid('exercise_id').references(() => exercises.id, { onDelete: 'cascade' }),
+  bodyPart: text('body_part'),
+  weekIndex: smallint('week_index').notNull().default(1),
   sortIndex: smallint('sort_index').notNull().default(0),
-  targetSets: smallint('target_sets').notNull(),
-  repsMin: integer('reps_min').notNull(),
-  repsMax: integer('reps_max').notNull(),
+  targetSets: smallint('target_sets'),
+  repsMin: integer('reps_min'),
+  repsMax: integer('reps_max'),
   targetWeight: numeric('target_weight', { precision: 10, scale: 2 }),
   prescriptionKind: prescriptionKindEnum('prescription_kind').notNull().default('none'),
   prescriptionValue: numeric('prescription_value', { precision: 10, scale: 2 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
+});
+
+export const workoutBlocks = pgTable('workout_blocks', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  startDate: date('start_date'),
+  weekCount: smallint('week_count').notNull().default(3),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const dayWorkoutSessions = pgTable(
@@ -345,13 +355,13 @@ export const dayWorkoutExercises = pgTable('day_workout_exercises', {
   sessionId: uuid('session_id')
     .notNull()
     .references(() => dayWorkoutSessions.id, { onDelete: 'cascade' }),
-  exerciseId: uuid('exercise_id')
-    .notNull()
-    .references(() => exercises.id, { onDelete: 'cascade' }),
+  exerciseId: uuid('exercise_id').references(() => exercises.id, { onDelete: 'cascade' }),
+  bodyPart: text('body_part'),
+  weekIndex: smallint('week_index').notNull().default(1),
   sortIndex: smallint('sort_index').notNull().default(0),
-  targetSets: smallint('target_sets').notNull(),
-  repsMin: integer('reps_min').notNull(),
-  repsMax: integer('reps_max').notNull(),
+  targetSets: smallint('target_sets'),
+  repsMin: integer('reps_min'),
+  repsMax: integer('reps_max'),
   targetWeight: numeric('target_weight', { precision: 10, scale: 2 }),
   prescriptionKind: prescriptionKindEnum('prescription_kind').notNull().default('none'),
   prescriptionValue: numeric('prescription_value', { precision: 10, scale: 2 }),
@@ -413,6 +423,7 @@ export type DailyLogMaterialization = typeof dailyLogMaterializations.$inferSele
 export type Exercise = typeof exercises.$inferSelect;
 export type WorkoutTemplate = typeof workoutTemplates.$inferSelect;
 export type WorkoutTemplateExercise = typeof workoutTemplateExercises.$inferSelect;
+export type WorkoutBlock = typeof workoutBlocks.$inferSelect;
 export type DayWorkoutSession = typeof dayWorkoutSessions.$inferSelect;
 export type DayWorkoutExercise = typeof dayWorkoutExercises.$inferSelect;
 export type WorkoutSetLog = typeof workoutSetLogs.$inferSelect;
@@ -434,6 +445,7 @@ export const schema = {
   exercises,
   workoutTemplates,
   workoutTemplateExercises,
+  workoutBlocks,
   dayWorkoutSessions,
   dayWorkoutExercises,
   workoutSetLogs,

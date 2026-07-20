@@ -25,6 +25,7 @@ export class ApiClient {
   private userId: string | null = null;
   private userRole: UserRole | null = null;
   private userEmail: string | null = null;
+  private refreshPromise: Promise<boolean> | null = null;
 
   constructor(
     private readonly tokenStorage: TokenStorage,
@@ -115,21 +116,31 @@ export class ApiClient {
   }
 
   private async tryRefresh() {
-    try {
-      const data = await this.request<{ accessToken: string; refreshToken: string }>(
-        '/auth/refresh',
-        {
-          method: 'POST',
-          body: { refreshToken: this.refreshToken },
-          auth: false,
-        },
-      );
-      await this.setTokens(data.accessToken, data.refreshToken);
-      return true;
-    } catch {
-      await this.clearTokens();
-      return false;
+    if (this.refreshPromise) {
+      return this.refreshPromise;
     }
+
+    this.refreshPromise = (async () => {
+      try {
+        const data = await this.request<{ accessToken: string; refreshToken: string }>(
+          '/auth/refresh',
+          {
+            method: 'POST',
+            body: { refreshToken: this.refreshToken },
+            auth: false,
+          },
+        );
+        await this.setTokens(data.accessToken, data.refreshToken);
+        return true;
+      } catch {
+        await this.clearTokens();
+        return false;
+      } finally {
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
   }
 
   getMe() {
@@ -157,24 +168,28 @@ export class ApiClient {
     );
   }
 
-  register(email: string, password: string, inviteToken?: string) {
+  register(email: string, password: string, inviteToken?: string, trustedDevice = true) {
     return this.request<{
       user: User;
       accessToken: string;
       refreshToken: string;
     }>('/auth/register', {
       method: 'POST',
-      body: { email, password, inviteToken },
+      body: { email, password, inviteToken, trustedDevice },
       auth: false,
     });
   }
 
-  login(email: string, password: string) {
+  login(email: string, password: string, trustedDevice = true) {
     return this.request<{
       user: User;
       accessToken: string;
       refreshToken: string;
-    }>('/auth/login', { method: 'POST', body: { email, password }, auth: false });
+    }>('/auth/login', {
+      method: 'POST',
+      body: { email, password, trustedDevice },
+      auth: false,
+    });
   }
 
   listUsers() {
@@ -463,6 +478,10 @@ export class ApiClient {
     );
   }
 
+  getAllWorkoutTemplateExercises(options: ForUserOptions = {}) {
+    return this.request(withForUserId('/workout-template-exercises', options.forUserId));
+  }
+
   addWorkoutTemplateExercise(templateId: string, body: unknown, options: ForUserOptions = {}) {
     return this.request(
       withForUserId(`/workout-templates/${templateId}/exercises`, options.forUserId),
@@ -480,6 +499,23 @@ export class ApiClient {
   deleteWorkoutTemplateExercise(id: string, options: ForUserOptions = {}) {
     return this.request(withForUserId(`/workout-template-exercises/${id}`, options.forUserId), {
       method: 'DELETE',
+    });
+  }
+
+  getWorkoutBlock(options: ForUserOptions = {}) {
+    return this.request(withForUserId('/workouts/block', options.forUserId));
+  }
+
+  updateWorkoutBlock(body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/workouts/block', options.forUserId), {
+      method: 'PATCH',
+      body,
+    });
+  }
+
+  ensureWorkoutBoard(options: ForUserOptions = {}) {
+    return this.request(withForUserId('/workouts/ensure-board', options.forUserId), {
+      method: 'POST',
     });
   }
 

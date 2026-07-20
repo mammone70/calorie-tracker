@@ -17,6 +17,7 @@ export default function LoginScreen() {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [trustedDevice, setTrustedDevice] = useState(true);
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
@@ -26,7 +27,7 @@ export default function LoginScreen() {
     }
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email, password, trustedDevice);
       router.replace('/(tabs)');
     } catch (error) {
       Alert.alert('Login failed', error instanceof Error ? error.message : 'Unknown error');
@@ -63,6 +64,20 @@ export default function LoginScreen() {
         />
 
         <TouchableOpacity
+          style={styles.trustRow}
+          onPress={() => setTrustedDevice((v) => !v)}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: trustedDevice }}
+        >
+          <View style={[styles.checkbox, trustedDevice && styles.checkboxChecked]}>
+            {trustedDevice ? <Text style={styles.checkmark}>✓</Text> : null}
+          </View>
+          <Text style={styles.trustLabel}>
+            Trust this device — stay signed in longer on devices you own
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleLogin}
           disabled={loading}
@@ -83,6 +98,20 @@ const styles = StyleSheet.create({
   content: { flex: 1, padding: 24, justifyContent: 'center' },
   title: { fontSize: 28, fontWeight: '700', marginBottom: 8, color: colors.text },
   subtitle: { fontSize: 16, color: colors.textMuted, marginBottom: 32 },
+  trustRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 4, marginBottom: 4 },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: colors.textMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  checkboxChecked: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  checkmark: { color: colors.onPrimary, fontSize: 14, fontWeight: '700', lineHeight: 16 },
+  trustLabel: { flex: 1, color: colors.textMuted, fontSize: 14, lineHeight: 20 },
   button: {
     backgroundColor: colors.primaryDark,
     padding: 16,
