@@ -54,10 +54,7 @@ export class ExercisesService {
     input: CreateExerciseInput,
     options: { id?: string; role?: UserRole } = {},
   ) {
-    const isGlobal = input.isGlobal === true;
-    if (isGlobal && options.role !== 'admin') {
-      throw new ForbiddenException('Only admins can create global exercises');
-    }
+    const isGlobal = input.isGlobal !== false;
 
     try {
       const [row] = await this.db

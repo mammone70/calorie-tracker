@@ -3,8 +3,8 @@ import { z } from 'zod';
 export const createExerciseSchema = z.object({
   name: z.string().min(1).max(200),
   notes: z.string().max(2000).optional().nullable(),
-  /** Global catalog entry — only admins may set this. */
-  isGlobal: z.boolean().optional().default(false),
+  /** Global catalog entry — defaults to true for new exercises. */
+  isGlobal: z.boolean().optional().default(true),
 });
 
 export const updateExerciseSchema = z.object({

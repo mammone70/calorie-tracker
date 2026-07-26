@@ -131,3 +131,13 @@ export function formatHeaderDate(dateStr: string): string {
   });
   return `${weekday}, ${month}/${day}/${year}`;
 }
+
+/** e.g. "July 25, 2026" */
+export function formatDisplayDate(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0, 0).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}

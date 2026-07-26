@@ -10,6 +10,7 @@ import {
   dayOfWeekFromDate,
   defaultMealName,
   formatCalendarDate,
+  formatDisplayDate,
   formatMealTime,
   getClientTimeZone,
   groupFoodLogsByMeal,
@@ -325,6 +326,7 @@ export function DailyFoodLog({
 
       showSuccess('Meal confirmed');
       await queryClient.invalidateQueries({ queryKey: ['food-logs', date] });
+      closeMealDetail();
     } catch (error) {
       showErrorFromUnknown(error);
     } finally {
@@ -873,8 +875,8 @@ export function DailyFoodLog({
                 </DialogTitle>
                 <DialogDescription>
                   {formatMealTime(selectedMeal.mealTime)
-                    ? `${formatMealTime(selectedMeal.mealTime)} · ${date}`
-                    : date}
+                    ? `${formatMealTime(selectedMeal.mealTime)} · ${formatDisplayDate(date)}`
+                    : formatDisplayDate(date)}
                 </DialogDescription>
               </DialogHeader>
 
@@ -1015,7 +1017,7 @@ export function DailyFoodLog({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add meal</DialogTitle>
-            <DialogDescription>Name this meal for {date}</DialogDescription>
+            <DialogDescription>Name this meal for {formatDisplayDate(date)}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
@@ -1054,7 +1056,7 @@ export function DailyFoodLog({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add food to {addFoodMeal?.name ?? 'meal'}</DialogTitle>
-              <DialogDescription>Logging for {date}</DialogDescription>
+              <DialogDescription>Logging for {formatDisplayDate(date)}</DialogDescription>
             </DialogHeader>
 
             <div className="space-y-3">

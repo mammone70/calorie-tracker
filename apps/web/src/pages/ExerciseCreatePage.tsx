@@ -15,7 +15,7 @@ export function ExerciseCreatePage() {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
-  const [isGlobal, setIsGlobal] = useState(false);
+  const [isGlobal, setIsGlobal] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -27,7 +27,7 @@ export function ExerciseCreatePage() {
       await api.createExercise({
         name: name.trim(),
         notes: notes.trim() || null,
-        isGlobal: isAdmin && isGlobal,
+        isGlobal: isAdmin ? isGlobal : true,
       });
       await queryClient.invalidateQueries({ queryKey: ['exercises'] });
       navigate('/exercises');

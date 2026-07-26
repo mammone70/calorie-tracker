@@ -7,11 +7,16 @@ export function PageHeader({
   title,
   backTo,
   embedded = false,
+  showActions,
 }: {
   title: string;
   backTo?: string;
   embedded?: boolean;
+  /** Defaults to false when embedded (AppLayout already shows header actions). */
+  showActions?: boolean;
 }) {
+  const actionsVisible = showActions ?? !embedded;
+
   return (
     <header
       className={cn(
@@ -26,9 +31,11 @@ export function PageHeader({
           </Button>
         )}
         <h1 className="min-w-0 truncate text-lg font-bold">{title}</h1>
-        <div className="ml-auto shrink-0">
-          <HeaderActions />
-        </div>
+        {actionsVisible && (
+          <div className="ml-auto shrink-0">
+            <HeaderActions />
+          </div>
+        )}
       </div>
     </header>
   );

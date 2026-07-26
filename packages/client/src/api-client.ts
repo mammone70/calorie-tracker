@@ -596,6 +596,29 @@ export class ApiClient {
     });
   }
 
+  getBodyWeight(date: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/body-weight?date=${date}`, options.forUserId));
+  }
+
+  getBodyWeightRange(from: string, to: string, options: ForUserOptions = {}) {
+    return this.request(
+      withForUserId(`/body-weight/range?from=${from}&to=${to}`, options.forUserId),
+    );
+  }
+
+  upsertBodyWeight(body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/body-weight', options.forUserId), {
+      method: 'POST',
+      body,
+    });
+  }
+
+  deleteBodyWeight(id: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/body-weight/${id}`, options.forUserId), {
+      method: 'DELETE',
+    });
+  }
+
   syncPull(since?: string) {
     const query = since ? `?since=${encodeURIComponent(since)}` : '';
     return this.request(`/sync${query}`);

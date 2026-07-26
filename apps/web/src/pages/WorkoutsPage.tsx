@@ -625,6 +625,14 @@ export function WorkoutsPage({
             initial={entryDialog?.mode === 'edit' ? entryDialog.entry : null}
             showWeekIndex
             onSubmit={saveMobileEntry}
+            onCreateExercise={async (name) => {
+              const created = (await api.createExercise(
+                { name: name.trim(), isGlobal: true },
+                opts,
+              )) as Exercise;
+              await queryClient.invalidateQueries({ queryKey: ['exercises', forUserId] });
+              return created;
+            }}
           />
         </div>
         )}

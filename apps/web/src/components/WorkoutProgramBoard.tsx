@@ -2,6 +2,13 @@ import { useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { WorkoutEntryDialog, type WorkoutEntryFormValues } from './WorkoutEntryDialog';
@@ -40,7 +47,9 @@ type WorkoutProgramBoardProps = {
 
 const forUserOpts = (forUserId?: string) => (forUserId ? { forUserId } : {});
 
-type DialogState =
+type DayEditorState = { weekIndex: number; dayOfWeek: number } | null;
+
+type EntryDialogState =
   | { mode: 'add'; weekIndex: number; dayOfWeek: number }
   | { mode: 'edit'; entry: WorkoutTemplateExercise; weekIndex: number; dayOfWeek: number }
   | null;
@@ -51,8 +60,8 @@ export function WorkoutProgramBoard({ forUserId, exercises }: WorkoutProgramBoar
   const opts = forUserOpts(forUserId);
   const queryClient = useQueryClient();
   const [error, setError] = useState('');
-  const [dialog, setDialog] = useState<DialogState>(null);
-  /** Fade these out before removing from the query cache (table rows skip AnimatePresence exits). */
+  const [dayEditor, setDayEditor] = useState<DayEditorState>(null);
+  const [dialog, setDialog] = useState<EntryDialogState>(null);
   const [fadingOutIds, setFadingOutIds] = useState(() => new Set<string>());
   const fadingOutIdsRef = useRef(fadingOutIds);
   fadingOutIdsRef.current = fadingOutIds;
@@ -127,6 +136,20 @@ export function WorkoutProgramBoard({ forUserId, exercises }: WorkoutProgramBoar
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update block');
     }
+  };
+
+  const createExercise = async (name: string): Promise<Exercise> => {
+    const created = (await api.createExercise(
+      { name: name.trim(), isGlobal: true },
+      opts,
+    )) as Exercise;
+    await queryClient.invalidateQueries({ queryKey: ['exercises', forUserId] });
+    queryClient.setQueryData<Exercise[]>(['exercises', forUserId], (current) => {
+      const list = current ?? [];
+      if (list.some((ex) => ex.id === created.id)) return list;
+      return [...list, created].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    return created;
   };
 
   const commitRemoveEntry = async (id: string, templateId: string) => {
@@ -262,6 +285,11 @@ export function WorkoutProgramBoard({ forUserId, exercises }: WorkoutProgramBoar
     }
   };
 
+  const editorRows =
+    dayEditor != null ? cellEntries(dayEditor.weekIndex, dayEditor.dayOfWeek) : [];
+  const editorTemplate =
+    dayEditor != null ? weekdayTemplates[dayEditor.dayOfWeek] : null;
+
   if (boardQuery.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading program board…</p>;
   }
@@ -294,7 +322,7 @@ export function WorkoutProgramBoard({ forUserId, exercises }: WorkoutProgramBoar
           />
         </div>
         <p className="pb-2 text-xs text-muted-foreground">
-          Click an entry to edit sets/reps. Leave targets blank for open slots.
+          Click a day cell to add, edit, or remove exercises.
         </p>
       </div>
 
@@ -345,71 +373,44 @@ export function WorkoutProgramBoard({ forUserId, exercises }: WorkoutProgramBoar
                 </th>
                 {WEEKDAYS.map((_, dayOfWeek) => {
                   const rows = cellEntries(weekIndex, dayOfWeek);
-                  const template = weekdayTemplates[dayOfWeek];
                   return (
                     <td
                       key={dayOfWeek}
-                      className="min-w-[8.5rem] border-b border-r border-border p-1.5 last:border-r-0"
+                      className="min-w-[8.5rem] border-b border-r border-border p-0 last:border-r-0"
                     >
-                      <ul className="space-y-0.5">
-                        <AnimatePresence initial={false}>
-                          {rows.map((row) => {
+                      <button
+                        type="button"
+                        className="flex min-h-[4.5rem] w-full flex-col gap-0.5 p-1.5 text-left hover:bg-muted/40"
+                        onClick={() => setDayEditor({ weekIndex, dayOfWeek })}
+                      >
+                        {rows.length === 0 ? (
+                          <span className="px-1 py-2 text-xs text-muted-foreground">Empty</span>
+                        ) : (
+                          rows.map((row, index) => {
                             const summary = formatExercisePrescriptionSummary({
                               ...row,
                               weightUnit,
                             });
-                            const isFadingOut = fadingOutIds.has(row.id);
                             return (
-                              <motion.li
+                              <span
                                 key={row.id}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: isFadingOut ? 0 : 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ duration: 0.22, ease: 'easeOut' }}
-                                onAnimationComplete={() => onRowFadeComplete(row.id)}
-                                className="group flex items-start gap-1"
+                                className={cn(
+                                  'block rounded px-1.5 py-1 leading-snug',
+                                  index % 2 === 0 ? 'bg-background' : 'bg-muted/70',
+                                )}
                               >
-                                <button
-                                  type="button"
-                                  className="min-w-0 flex-1 rounded px-1 py-0.5 text-left hover:bg-muted/60"
-                                  onClick={() =>
-                                    setDialog({ mode: 'edit', entry: row, weekIndex, dayOfWeek })
-                                  }
-                                >
-                                  <span className="block leading-snug">
-                                    {workoutEntryLabel(row, exerciseMap)}
+                                <span className="block text-[13px]">
+                                  {workoutEntryLabel(row, exerciseMap)}
+                                </span>
+                                {summary ? (
+                                  <span className="block text-[11px] text-muted-foreground">
+                                    {summary}
                                   </span>
-                                  {summary ? (
-                                    <span className="block text-[11px] text-muted-foreground">
-                                      {summary}
-                                    </span>
-                                  ) : null}
-                                </button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="invisible h-6 px-1 text-destructive group-hover:visible"
-                                  disabled={isFadingOut}
-                                  onClick={() => {
-                                    if (!template) return;
-                                    beginRemoveEntry(row.id, template.id);
-                                  }}
-                                  aria-label="Remove"
-                                >
-                                  ×
-                                </Button>
-                              </motion.li>
+                                ) : null}
+                              </span>
                             );
-                          })}
-                        </AnimatePresence>
-                      </ul>
-                      <button
-                        type="button"
-                        className="mt-1 w-full rounded px-1 py-0.5 text-left text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                        onClick={() => setDialog({ mode: 'add', weekIndex, dayOfWeek })}
-                      >
-                        + Add
+                          })
+                        )}
                       </button>
                     </td>
                   );
@@ -419,6 +420,112 @@ export function WorkoutProgramBoard({ forUserId, exercises }: WorkoutProgramBoar
           </tbody>
         </table>
       </div>
+
+      <Dialog
+        open={dayEditor != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDayEditor(null);
+            setDialog(null);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          {dayEditor && (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  {editorTemplate?.name ?? WEEKDAYS[dayEditor.dayOfWeek]}
+                </DialogTitle>
+                <DialogDescription>
+                  Week {dayEditor.weekIndex} · {WEEKDAYS[dayEditor.dayOfWeek]}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3">
+                <ul className="overflow-hidden rounded-md border border-border">
+                  <AnimatePresence initial={false}>
+                    {editorRows.length === 0 ? (
+                      <li className="px-3 py-4 text-sm text-muted-foreground">
+                        No exercises yet for this day.
+                      </li>
+                    ) : (
+                      editorRows.map((row, index) => {
+                        const summary = formatExercisePrescriptionSummary({
+                          ...row,
+                          weightUnit,
+                        });
+                        const isFadingOut = fadingOutIds.has(row.id);
+                        return (
+                          <motion.li
+                            key={row.id}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: isFadingOut ? 0 : 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2, ease: 'easeOut' }}
+                            onAnimationComplete={() => onRowFadeComplete(row.id)}
+                            className={cn(
+                              'flex items-start gap-2 px-3 py-2',
+                              index % 2 === 0 ? 'bg-background' : 'bg-muted/60',
+                            )}
+                          >
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 text-left"
+                              onClick={() =>
+                                setDialog({
+                                  mode: 'edit',
+                                  entry: row,
+                                  weekIndex: dayEditor.weekIndex,
+                                  dayOfWeek: dayEditor.dayOfWeek,
+                                })
+                              }
+                            >
+                              <p className="font-medium leading-snug">
+                                {workoutEntryLabel(row, exerciseMap)}
+                              </p>
+                              {summary ? (
+                                <p className="text-xs text-muted-foreground">{summary}</p>
+                              ) : null}
+                            </button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 shrink-0 px-2 text-destructive"
+                              disabled={isFadingOut || !editorTemplate}
+                              onClick={() => {
+                                if (!editorTemplate) return;
+                                beginRemoveEntry(row.id, editorTemplate.id);
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          </motion.li>
+                        );
+                      })
+                    )}
+                  </AnimatePresence>
+                </ul>
+
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() =>
+                    setDialog({
+                      mode: 'add',
+                      weekIndex: dayEditor.weekIndex,
+                      dayOfWeek: dayEditor.dayOfWeek,
+                    })
+                  }
+                >
+                  Add exercise
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <WorkoutEntryDialog
         open={dialog != null}
@@ -432,6 +539,7 @@ export function WorkoutProgramBoard({ forUserId, exercises }: WorkoutProgramBoar
         weekLabel={dialog ? `Week ${dialog.weekIndex}` : undefined}
         dayLabel={dialog ? WEEKDAYS[dialog.dayOfWeek] : undefined}
         onSubmit={saveEntry}
+        onCreateExercise={createExercise}
       />
     </div>
   );

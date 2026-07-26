@@ -61,6 +61,7 @@ type WorkoutEntryDialogProps = {
   weekLabel?: string;
   dayLabel?: string;
   onSubmit: (values: WorkoutEntryFormValues) => Promise<void>;
+  onCreateExercise?: (name: string) => Promise<Exercise>;
 };
 
 function emptyForm(defaultWeekIndex = 1): {
@@ -122,6 +123,7 @@ export function WorkoutEntryDialog({
   weekLabel,
   dayLabel,
   onSubmit,
+  onCreateExercise,
 }: WorkoutEntryDialogProps) {
   const [form, setForm] = useState(() => emptyForm(defaultWeekIndex));
   const [error, setError] = useState('');
@@ -220,6 +222,7 @@ export function WorkoutEntryDialog({
                 exercises={exercises}
                 value={form.exerciseId}
                 onChange={(exerciseId) => setForm((f) => ({ ...f, exerciseId }))}
+                onCreateExercise={onCreateExercise}
               />
             </div>
           ) : (

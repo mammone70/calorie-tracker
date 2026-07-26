@@ -429,6 +429,30 @@ export type DayWorkoutExercise = typeof dayWorkoutExercises.$inferSelect;
 export type WorkoutSetLog = typeof workoutSetLogs.$inferSelect;
 export type DailyWorkoutMaterialization = typeof dailyWorkoutMaterializations.$inferSelect;
 
+export const bodyWeightLogs = pgTable(
+  'body_weight_logs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    loggedOn: date('logged_on').notNull(),
+    weight: numeric('weight', { precision: 8, scale: 2 }).notNull(),
+    unit: weightUnitEnum('unit').notNull().default('lbs'),
+    notes: text('notes'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('body_weight_logs_user_day_active_idx')
+      .on(table.userId, table.loggedOn)
+      .where(sql`deleted_at IS NULL`),
+  ],
+);
+
+export type BodyWeightLog = typeof bodyWeightLogs.$inferSelect;
+
 export const schema = {
   users,
   invitations,
@@ -450,4 +474,5 @@ export const schema = {
   dayWorkoutExercises,
   workoutSetLogs,
   dailyWorkoutMaterializations,
+  bodyWeightLogs,
 };
