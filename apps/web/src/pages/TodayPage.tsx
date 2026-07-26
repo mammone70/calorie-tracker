@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DayViewHeader } from '../components/DayViewHeader';
 import { TodayProgress } from '../components/TodayProgress';
 import { BodyWeightCard } from '../components/BodyWeightCard';
+import { WaistCircumferenceCard } from '../components/WaistCircumferenceCard';
 import { DailyWorkouts } from '../components/DailyWorkouts';
 import { confirmedFoodLogs, formatNutrientsSummary } from '@calorie-tracker/shared';
 import { DailyFoodLog, ensureWeeklyMealsForDate } from '../components/DailyFoodLog';
@@ -117,7 +118,10 @@ export function TodayPage() {
       <DayViewHeader selectedDate={selectedDate} today={today} onSelectDate={onSelectDate} />
 
       <div className="mx-auto w-full min-w-0 max-w-lg space-y-3 px-4 pb-4 pt-3">
-        <BodyWeightCard date={selectedDate} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <BodyWeightCard date={selectedDate} />
+          <WaistCircumferenceCard date={selectedDate} />
+        </div>
 
         <Tabs value={tab} onValueChange={onTabChange} className="w-full gap-0">
           <TabsList>

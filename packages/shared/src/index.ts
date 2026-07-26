@@ -16,6 +16,7 @@ export * from './schemas/food-log';
 export * from './food-log-utils';
 export * from './schemas/exercise';
 export * from './schemas/body-weight';
+export * from './schemas/waist-circumference';
 export * from './schemas/workout-template';
 export * from './schemas/day-workout';
 export * from './workout-utils';

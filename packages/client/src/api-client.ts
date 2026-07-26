@@ -619,6 +619,40 @@ export class ApiClient {
     });
   }
 
+  getWaistCircumference(date: string, options: ForUserOptions = {}) {
+    return this.request(
+      withForUserId(`/waist-circumference?date=${date}`, options.forUserId),
+    );
+  }
+
+  getLatestWaistCircumference(onOrBefore?: string, options: ForUserOptions = {}) {
+    const params = new URLSearchParams();
+    if (onOrBefore) params.set('onOrBefore', onOrBefore);
+    const query = params.toString();
+    return this.request(
+      withForUserId(`/waist-circumference/latest${query ? `?${query}` : ''}`, options.forUserId),
+    );
+  }
+
+  getWaistCircumferenceRange(from: string, to: string, options: ForUserOptions = {}) {
+    return this.request(
+      withForUserId(`/waist-circumference/range?from=${from}&to=${to}`, options.forUserId),
+    );
+  }
+
+  upsertWaistCircumference(body: unknown, options: ForUserOptions = {}) {
+    return this.request(withForUserId('/waist-circumference', options.forUserId), {
+      method: 'POST',
+      body,
+    });
+  }
+
+  deleteWaistCircumference(id: string, options: ForUserOptions = {}) {
+    return this.request(withForUserId(`/waist-circumference/${id}`, options.forUserId), {
+      method: 'DELETE',
+    });
+  }
+
   syncPull(since?: string) {
     const query = since ? `?since=${encodeURIComponent(since)}` : '';
     return this.request(`/sync${query}`);

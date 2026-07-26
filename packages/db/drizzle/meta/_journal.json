@@ -106,6 +106,13 @@
       "when": 1753497600000,
       "tag": "0015_body_weight_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1753584000000,
+      "tag": "0016_waist_circumference_logs",
+      "breakpoints": true
     }
   ]
 }

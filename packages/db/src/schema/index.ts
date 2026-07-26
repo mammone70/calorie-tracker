@@ -453,6 +453,29 @@ export const bodyWeightLogs = pgTable(
 
 export type BodyWeightLog = typeof bodyWeightLogs.$inferSelect;
 
+export const waistCircumferenceLogs = pgTable(
+  'waist_circumference_logs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    loggedOn: date('logged_on').notNull(),
+    inches: numeric('inches', { precision: 6, scale: 3 }).notNull(),
+    notes: text('notes'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('waist_circumference_logs_user_day_active_idx')
+      .on(table.userId, table.loggedOn)
+      .where(sql`deleted_at IS NULL`),
+  ],
+);
+
+export type WaistCircumferenceLog = typeof waistCircumferenceLogs.$inferSelect;
+
 export const schema = {
   users,
   invitations,
@@ -475,4 +498,5 @@ export const schema = {
   workoutSetLogs,
   dailyWorkoutMaterializations,
   bodyWeightLogs,
+  waistCircumferenceLogs,
 };

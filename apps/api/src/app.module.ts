@@ -9,6 +9,7 @@ import { MealPlansModule } from './meal-plans/meal-plans.module';
 import { FoodLogsModule } from './food-logs/food-logs.module';
 import { ExercisesModule } from './exercises/exercises.module';
 import { BodyWeightModule } from './body-weight/body-weight.module';
+import { WaistCircumferenceModule } from './waist-circumference/waist-circumference.module';
 import { WorkoutsModule } from './workouts/workouts.module';
 import { SyncModule } from './sync/sync.module';
 import { AdminModule } from './admin/admin.module';
@@ -31,6 +32,7 @@ import { HealthController } from './health.controller';
     FoodLogsModule,
     ExercisesModule,
     BodyWeightModule,
+    WaistCircumferenceModule,
     WorkoutsModule,
     SyncModule,
     AdminModule,
